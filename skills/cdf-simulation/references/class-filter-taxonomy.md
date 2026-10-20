@@ -1,6 +1,6 @@
 # Pitfall: `class_filter` is not `component_types`
 
-Reference for `skills/cdf-simulate`. Two taxonomies that look
+Reference for `skills/cdf-simulation`. Two taxonomies that look
 interchangeable and are not; passing the wrong one produces zero crop files
 while reporting success.
 

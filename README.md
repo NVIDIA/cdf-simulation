@@ -259,7 +259,7 @@ Start from one of these templates:
 | Skill | Use for |
 |---|---|
 | [`skills/cdf`](skills/cdf/SKILL.md) | Generate and validate declarative `CDFJob` Python scripts |
-| [`skills/cdf-simulate`](skills/cdf-simulate/SKILL.md) | Author CDF Python jobs for automated DIG Flow Catalog requests |
+| [`skills/cdf-simulation`](skills/cdf-simulation/SKILL.md) | Author CDF Python jobs for automated DIG Flow Catalog requests |
 
 ## Project structure
 

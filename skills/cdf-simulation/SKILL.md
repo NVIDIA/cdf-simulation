@@ -1,5 +1,5 @@
 ---
-name: cdf-simulate
+name: cdf-simulation
 description: Component-owned guidance for the cdf-simulation half of the Airflow-triggered PM prompt templates (DIG Flow Catalog) — golden THT board, THT pin-geometry variation, good/clean SMT images, structural pose defects, and solder texture defects. Turns one matched prompt into one validated `cdf.CDFJob` build and its compiled JobOrder payload, then hands that to the SDG workflow-operations skill; it never executes a render itself. Never asks a clarifying question; resolves every unspecified detail with a fixed, documented default. Not for interactive requests (route those to `skills/cdf` instead), not for real-photo input, not for AnomalyGen fine-tuning.
 license: Apache-2.0
 owner: NVIDIA
@@ -17,7 +17,7 @@ metadata:
   - airflow
 ---
 
-# cdf-simulate
+# cdf-simulation
 
 Turns the PM's "DIG Flow Catalog" prompt templates into `cdf` jobs through
 the declarative Python API, with **zero interactive turns**. In the SDG
@@ -69,7 +69,7 @@ the corresponding SQA YAML config. A prompt carrying a flow marker -- a scan
 grid and "stitched", a defect on a **named refdes** ("shift on C33",
 "insufficient solder on J17", "missing-component defect on LS1"),
 "component-focus" or "pin-focus" crops -- is a flow, not a catalog row, and
-takes its fixed values from that file (Marc's SQA numbers, which differ from
+takes its fixed values from that file (the SQA reference values, which differ from
 the catalog defaults: shift is `translate_range=0.5, rotate_z_range=5.0` with
 no `variant_index`, crops are ROI captures rather than `postprocess.crop`).
 

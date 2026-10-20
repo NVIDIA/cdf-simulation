@@ -1,7 +1,7 @@
 # SQA prompt P01 -- DIG Flow Catalog row 1, "Generate a golden board image
 # using the attached USD", with tests/functional/resources/
 # ARTIX_PINHEADER_J13_coupon.usdc attached. This is the JobConfig the
-# cdf-simulate skill hands to Airflow for that attachment;
+# cdf-simulation skill hands to Airflow for that attachment;
 # tests/unittests/api_parity/test_skill_prompt_yaml_api_parity.py asserts it
 # compiles to the same plan as a Python API build of the job. The renderer
 # values are the SQA harness arguments (640x360, 4 spp), not catalog defaults.

@@ -1,4 +1,4 @@
-# Skill Benchmark: cdf-simulate
+# Skill Benchmark: cdf-simulation
 
 > ✅ **Overall verdict: PASS — Recommended for publication**
 
@@ -8,7 +8,7 @@ Recommended for publication based on the completed evaluation evidence in this r
 
 ## Evaluation Metadata
 
-- Skill: `cdf-simulate`
+- Skill: `cdf-simulation`
 - Evaluation date: 2026-10-14
 - Evaluator version: `1.5.6`
 - Agents: Claude Code (`aws/anthropic/bedrock-claude-opus-4-8`), Codex (`openai/openai/gpt-5.5`)
@@ -89,8 +89,8 @@ Prompt tokens include cached reads, so total tokens are `prompt + completion` (c
 <details>
 <summary>Show detailed findings and successful checks</summary>
 
-- **MEDIUM** QUALITY/quality_efficiency: Large skill (10823 tokens, recommended max <5000). Per agentskills.io, SKILL.md should be concise (~500 lines) — large skill bodies increase token cost after invocation; long or unfocused top-level descriptions can degrade agent routing accuracy (`skills/cdf-simulate/SKILL.md`)
-- **MEDIUM** SCHEMA/line_count: SKILL.md has 655 lines (limit: 500) (`skills/cdf-simulate/SKILL.md`)
+- **MEDIUM** QUALITY/quality_efficiency: Large skill (10823 tokens, recommended max <5000). Per agentskills.io, SKILL.md should be concise (~500 lines) — large skill bodies increase token cost after invocation; long or unfocused top-level descriptions can degrade agent routing accuracy (`skills/cdf-simulation/SKILL.md`)
+- **MEDIUM** SCHEMA/line_count: SKILL.md has 655 lines (limit: 500) (`skills/cdf-simulation/SKILL.md`)
 - **MEDIUM** SECURITY/Skill Enumeration (AS3): Agent Snooping: skills/cdf/SKILL.md (`SKILL.md:39`)
 - **MEDIUM** SECURITY/Skill Enumeration (AS3): Agent Snooping: skills/cdf/SKILL.md (`SKILL.md:177`)
 - **MEDIUM** SECURITY/Skill Enumeration (AS3): Agent Snooping: skills/cdf/SKILL.md (`SKILL.md:237`)

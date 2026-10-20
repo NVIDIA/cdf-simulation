@@ -670,7 +670,7 @@ class CaptureFovSquarePixelTest(unittest.TestCase):
         }
         self.assertEqual(by_pair, _orders(z_rotation=-90.0))
 
-    def test_marcs_pinned_canvas_reaches_the_grid_at_one_pitch(self) -> None:
+    def test_regression_pinned_canvas_reaches_the_grid_at_one_pitch(self) -> None:
         """6750 x 8436 px kept; the grid spans the grown, centred rectangle."""
         payload = _payload(z_rotation=-90.0)
         payload["capture"]["camera"]["side"] = "bottom"
@@ -678,7 +678,7 @@ class CaptureFovSquarePixelTest(unittest.TestCase):
             "scan_area_mm": [280.398, 348.54],
             "image_size_px": [6750, 8436],
             "max_tile_px": [1125, 1406],
-            # Marc's 6 x 6 tiling: with the default guard band the guarded
+            # Reference 6 x 6 tiling: with the default guard band the guarded
             # 1125 x 1406 tile no longer fits max_tile_px and the grid grows to
             # 7 x 7. This test is about the pitch, so it pins the band off.
             "guard_px": 0,

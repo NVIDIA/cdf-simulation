@@ -26,7 +26,7 @@ repository-specific operational context.
 - Declarative Python job or `CDFJob` script: handle here.
 - One of the fixed DIG Flow Catalog prompt shapes, fired by an automated
   pipeline (Airflow) rather than typed by a person: route to
-  `skills/cdf-simulate/SKILL.md`. It builds the same `CDFJob`
+  `skills/cdf-simulation/SKILL.md`. It builds the same `CDFJob`
   scripts, but resolves every ambiguity with a documented default instead of
   a clarifying question, which is correct only when nobody is there to answer
   one. Anything interactive stays here, including a request that merely

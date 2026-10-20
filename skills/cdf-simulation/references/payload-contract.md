@@ -1,6 +1,6 @@
 # Payload contract
 
-Reference for `skills/cdf-simulate`. This is the component-owner
+Reference for `skills/cdf-simulation`. This is the component-owner
 contract the SDG Workflow Skill Architecture asks for (§7.2): the parameters
 this component supports for each catalog row, how each one is validated, and
 the exact shape this skill hands to the workflow-operations skill. The skill

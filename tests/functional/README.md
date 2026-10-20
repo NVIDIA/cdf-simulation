@@ -25,7 +25,7 @@ replacement fixtures and their redistribution terms have been approved.
 | `test_pin_variation.py` | Render nominal and varied THT controls; ROI variants also verify that default-hidden hole and curved/angled pin-tip proxies reach semantic capture when explicitly revealed. |
 | `test_render_subprocess.py` | Call synchronous `CDFJob.capture.render()` from ordinary Python and verify plan/result transport through a real Isaac subprocess. |
 | `job_config_smoke.yaml` | Load the versioned YAML API through the packaged `config` entrypoint and render one small RGB frame. Its exact `JobOrderPlan` parity with Python is covered by the unit suite. |
-| `skill_prompts/*.yaml` | Nine versioned YAML files -- one per DIG Flow Catalog prompt the `cdf-simulate` skill serves (P01-P08) plus the default-coverage variant of the tombstone prompt (N07) -- each the job the skill hands to Airflow for that prompt on a repository coupon, with a hand-written Python API twin in `tests/unittests/api_parity/test_skill_prompt_yaml_api_parity.py`. They run through the same `config` entrypoint. |
+| `skill_prompts/*.yaml` | Nine versioned YAML files -- one per DIG Flow Catalog prompt the `cdf-simulation` skill serves (P01-P08) plus the default-coverage variant of the tombstone prompt (N07) -- each the job the skill hands to Airflow for that prompt on a repository coupon, with a hand-written Python API twin in `tests/unittests/api_parity/test_skill_prompt_yaml_api_parity.py`. They run through the same `config` entrypoint. |
 
 `smt_scenario.py` contains the shared SMT coupon, lighting, capture, crop, CLI,
 and Isaac execution harness. The two SMT test scripts provide only their

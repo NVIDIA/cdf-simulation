@@ -1,6 +1,6 @@
 # Verification status
 
-Reference for `skills/cdf-simulate`. Every one of the five
+Reference for `skills/cdf-simulation`. Every one of the five
 implemented catalog rows was actually executed, crops included -- this is the
 record of those runs and the defects they surfaced, not a plan. The
 fixtures it names are not shipped in the public release.

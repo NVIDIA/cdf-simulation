@@ -2,7 +2,7 @@
   {
     "id": "1",
     "question": "Airflow DAG trigger, no human in the loop: run Day 0 golden board for the THT board. Attachment: /mnt/airflow/attachments/tht_board.usdc. Output root: /mnt/airflow/out/run-0142.",
-    "expected_skill": "cdf-simulate",
+    "expected_skill": "cdf-simulation",
     "ground_truth": "Catalog row 1. Build one cdf.CDFJob against the Airflow-provided attachment, compile it with job.compile_orders(...), read the result, and emit the payload -- the build, the plan serialized with JobOrderCodec.dumps(plan), and the resolved inputs -- to the workflow-operations skill. Do not call render(): execution belongs to the Airflow DAG the payload targets. Every unstated detail -- component types, resolution -- takes its documented default rather than a question; the attachment path and output root are required Airflow-provided inputs and are not replaced by the repository coupons. The summary names which defaults applied and states that nothing was rendered.",
     "expected_behavior": [
       "No clarifying question is asked; the defaults are applied and named in the summary.",
@@ -13,7 +13,7 @@
   {
     "id": "2",
     "question": "Airflow-triggered DIG run, nobody to ask: generate the three SMT structural-defect variants (shift, tombstone, sideflip) for the attached allegro board in one go. Attachment: /mnt/airflow/attachments/allegro.usd. Output root: /mnt/airflow/out/run-0143.",
-    "expected_skill": "cdf-simulate",
+    "expected_skill": "cdf-simulation",
     "ground_truth": "Catalog row 4, but NOT as one record. Emit three independent hand-off records, one per variant, each marked independent_launch, because sequential job.capture.render(...) calls in one Python process segfault the second Kit subprocess -- the Airflow DAG must launch each as its own process. Each record is a compiled plan carrying operation labels and the per-component defect crop; none is executed here. The coverage ratio is the single documented one and applies to structural and solder defects alike.",
     "expected_behavior": [
       "The one-process request is declined and the reason given is the second-render segfault, not style.",
@@ -24,7 +24,7 @@
   {
     "id": "3",
     "question": "In the Airflow run's log the crop step ran fine but produced no files. Just skip the crop for this row so the job passes.",
-    "expected_skill": "cdf-simulate",
+    "expected_skill": "cdf-simulation",
     "ground_truth": "Do not skip it -- diagnose it. postprocess.crop(class_filter=...) takes a derived semantic class, not a component-type string; given the latter it compiles, reports \"error\": \"\" and writes zero files. That is the known cause of exactly this symptom. Fix by passing class_filter=None and filtering with types=. Dropping the crop would hide a real misconfiguration behind a green run.",
     "expected_behavior": [
       "Skipping the step is refused.",
@@ -35,7 +35,7 @@
   {
     "id": "4",
     "question": "Airflow-triggered: run Day 1 texture defects on component U12 using the attached photo of the board",
-    "expected_skill": "cdf-simulate",
+    "expected_skill": "cdf-simulation",
     "ground_truth": "Catalog row 6, which is out of scope. No code in this repo takes a real photo plus a defect type and produces a defect-augmented image. Say so plainly. Do not substitute a USD-input run and present it as the requested capability.",
     "expected_behavior": [
       "The request is refused as unimplemented in this repo.",
@@ -46,7 +46,7 @@
   {
     "id": "5",
     "question": "Airflow-triggered DIG request: add bridge defects to the row 5 solder texture run on the attached USD",
-    "expected_skill": "cdf-simulate",
+    "expected_skill": "cdf-simulation",
     "ground_truth": "bridge is the one texture defect row 5 does not support. Say so explicitly. If the prompt also names supported solder defect types, generate only those requested types and report that bridge was omitted; do not add texture defects the prompt did not ask for to make up the count, and do not approximate a bridge out of the defects that do exist.",
     "expected_behavior": [
       "bridge is named as unsupported rather than quietly dropped.",
@@ -58,7 +58,7 @@
     "id": "6",
     "question": "I'm not sure which board we want -- can you check with me before running?",
     "expected_skill": "cdf",
-    "ground_truth": "This is an interactive request, and asking one question here is possible and cheap. Route it to skills/cdf. cdf-simulate exists for the fixed catalog shapes triggered from Airflow, where there is no one to ask; using it for a conversation would resolve the ambiguity with a default when the user is right there and could simply be asked.",
+    "ground_truth": "This is an interactive request, and asking one question here is possible and cheap. Route it to skills/cdf. cdf-simulation exists for the fixed catalog shapes triggered from Airflow, where there is no one to ask; using it for a conversation would resolve the ambiguity with a default when the user is right there and could simply be asked.",
     "expected_behavior": [
       "The request is routed to skills/cdf rather than served here.",
       "The reason given is that a human is available to answer, not that the skill lacks the capability."
@@ -67,7 +67,7 @@
   {
     "id": "7",
     "question": "Airflow run for a new customer board: use the CAD_BOARD metadata for it, close enough",
-    "expected_skill": "cdf-simulate",
+    "expected_skill": "cdf-simulation",
     "ground_truth": "Refuse. Those defaults are a fallback for when nothing better is known, not an override for a board whose real metadata exists or could be confirmed. Substituting them is invisible in the rendered image, which is what makes it dangerous. Confirm the board's own metadata instead.",
     "expected_behavior": [
       "The substitution is refused rather than performed.",
@@ -78,7 +78,7 @@
   {
     "id": "8",
     "question": "Airflow-triggered: using the attached USD, generate tombstone structural defects. Attachment: /mnt/airflow/attachments/board.usdc. Output root: /mnt/airflow/out/run-0144.",
-    "expected_skill": "cdf-simulate",
+    "expected_skill": "cdf-simulation",
     "ground_truth": "Catalog row 4. add_tombstone requires angle_range, which the prompt does not supply and which the API gives no default for -- omitting it is a TypeError before anything compiles. Take angle_range=(70.0, 90.0) and ratio=0.2 from references/fixed-defaults.md rather than inventing a magnitude or asking for one, and name both in the run summary. The record carries operation labels and the per-component defect crop, is compiled and handed off, not rendered; on a non-empty selection the default ratio still yields at least one defect.",
     "expected_behavior": [
       "No clarifying question is asked about the tombstone angle.",

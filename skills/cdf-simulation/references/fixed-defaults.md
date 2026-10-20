@@ -1,6 +1,6 @@
 # Fixed defaults
 
-Reference for `skills/cdf-simulate`. Because the skill never asks a
+Reference for `skills/cdf-simulation`. Because the skill never asks a
 clarifying question, every value here is a documented, consistent choice rather
 than a guess made fresh each run. Read this before building any script.
 

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""YAML-versus-Python-API parity for the cdf-simulate SQA twins.
+"""YAML-versus-Python-API parity for the cdf-simulation SQA twins.
 
 One YAML file per DIG Flow Catalog row, plus the default-coverage tombstone
 variant N07, lives under ``tests/functional/skill_prompts/``. Each builder
@@ -23,7 +23,7 @@ to the same ``JobOrderPlan``.
 
 What this does and does not prove: it proves the YAML interpreter and the
 Python API agree on one job, so the YAML SQA executes is the plan the Python
-side would hand to Airflow. It does **not** read ``skills/cdf-simulate/
+side would hand to Airflow. It does **not** read ``skills/cdf-simulation/
 SKILL.md`` -- the builders are written by hand, not imported from the
 templates -- so a template can drift while this stays green. The evidence
 that the templates, and an agent following them, reach these plans requires

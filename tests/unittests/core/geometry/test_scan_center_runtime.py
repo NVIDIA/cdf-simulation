@@ -147,7 +147,7 @@ class SquarePixelGuardRuntimeTest(unittest.TestCase):
     _run = ScanCenterStageScaleTest._run
 
     def test_a_non_square_authored_frame_is_refused(self):
-        # Marc's numbers, authored by hand: 0.041540 mm/px across world X,
+        # Hand-authored regression values: 0.041540 mm/px across world X,
         # 0.041316 down world Y.
         for yaw, resolution in ((0.0, [1125, 1406]), (-90.0, [1406, 1125])):
             with (

@@ -540,21 +540,21 @@ class PinnedCanvasTest(unittest.TestCase):
 class SquarePixelTest(unittest.TestCase):
     """An image_size_px whose aspect is not the area's is delivered square.
 
-    Marc Soriano's repro (SDGW-1359): 280.398 x 348.54 mm pinned at
+    Regression case (SDGW-1359): 280.398 x 348.54 mm pinned at
     6750 x 8436 px asked for 0.041540 mm/px across and 0.041316 down. The
     renderer delivered 0.041316 on both image axes -- a 6 px step at every row
     seam and a 3 px sawtooth inside each tile -- while calibration.json claimed
     fx != fy.
     """
 
-    _MARC: ClassVar[dict[str, list[float]]] = {
+    _REGRESSION_CASE: ClassVar[dict[str, list[float]]] = {
         "scan_area_mm": [280.398, 348.54],
         "image_size_px": [6750, 8436],
         "max_tile_px": [1125, 1406],
     }
 
-    def test_marcs_request_gets_one_pitch_and_keeps_its_pixel_count(self):
-        r = resolve_fov(stage_meters_per_unit=MM_STAGE, **self._MARC)
+    def test_regression_request_gets_one_pitch_and_keeps_its_pixel_count(self):
+        r = resolve_fov(stage_meters_per_unit=MM_STAGE, **self._REGRESSION_CASE)
         pitch = 280.398 / 6750
         self.assertAlmostEqual(pitch, 0.041540, places=6)
         self.assertEqual(r["mm_per_px"], [pitch, pitch])
@@ -565,7 +565,7 @@ class SquarePixelTest(unittest.TestCase):
         self.assertEqual(r["tile_size_px"], [1125, 1406])
 
     def test_the_requested_rectangle_stays_covered_and_the_growth_is_recorded(self):
-        r = resolve_fov(stage_meters_per_unit=MM_STAGE, **self._MARC)
+        r = resolve_fov(stage_meters_per_unit=MM_STAGE, **self._REGRESSION_CASE)
         self.assertEqual(r["scan_area_mm"], [280.398, 348.54])
         eff_x, eff_y = r["scan_area_mm_effective"]
         self.assertAlmostEqual(eff_x, 280.398, places=9)
@@ -578,7 +578,7 @@ class SquarePixelTest(unittest.TestCase):
 
     def test_the_apertures_match_the_frame_aspect(self):
         """What the render-time guard checks, met by construction."""
-        r = resolve_fov(stage_meters_per_unit=MM_STAGE, **self._MARC)
+        r = resolve_fov(stage_meters_per_unit=MM_STAGE, **self._REGRESSION_CASE)
         check_square_pixels(
             r["horizontal_aperture_su"], r["vertical_aperture_su"], r["tile_size_px"]
         )
@@ -593,7 +593,7 @@ class SquarePixelTest(unittest.TestCase):
             stage_meters_per_unit=MM_STAGE,
             centre_xy_su=[10.0, -20.0],
             centered_on="panel",
-            **self._MARC,
+            **self._REGRESSION_CASE,
         )
         low, high = r["bounds_su"]["min_xy"], r["bounds_su"]["max_xy"]
         self.assertAlmostEqual((low[1] + high[1]) / 2.0, -20.0, places=9)
@@ -637,8 +637,8 @@ class SquarePixelGuardTest(unittest.TestCase):
             with self.subTest(hap=hap, vap=vap, res=res):
                 check_square_pixels(hap, vap, res)
 
-    def test_marcs_authored_frame_is_refused_naming_both_pitches(self):
-        """The apertures the pre-fix runtime set for Marc's capture."""
+    def test_regression_authored_frame_is_refused_naming_both_pitches(self):
+        """The apertures the pre-fix runtime set for the regression capture."""
         hap = 280.398 / 6
         vap = 348.54 / 6
         with self.assertRaisesRegex(

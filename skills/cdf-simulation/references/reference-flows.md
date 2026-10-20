@@ -1,6 +1,6 @@
 # Reference flows (config parity)
 
-Reference for `skills/cdf-simulate`. The catalog rows in `SKILL.md`
+Reference for `skills/cdf-simulation`. The catalog rows in `SKILL.md`
 describe the PM's prompt shapes. The flows below describe the **release SQA
 shapes**: the jobs the SQA YAML configs run, phrased as one Airflow prompt
 each, with every unstated value fixed here. A prompt that matches a flow must

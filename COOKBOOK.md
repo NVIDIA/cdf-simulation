@@ -13,7 +13,7 @@ Start here — everything else is one link away.
 | Declarative Python API (`cdf`) reference | [cdf/API_SPEC.md](cdf/API_SPEC.md) |
 | PCB-AOI versioned YAML API guide | [pcb_aoi/config/README.md](pcb_aoi/config/README.md) |
 | Full capability matrix (YAML ↔ API ↔ skills) | [cdf/CAPABILITIES.md](cdf/CAPABILITIES.md) |
-| Agent skills | [skills/cdf](skills/cdf/SKILL.md) · [skills/cdf-simulate](skills/cdf-simulate/SKILL.md) |
+| Agent skills | [skills/cdf](skills/cdf/SKILL.md) · [skills/cdf-simulation](skills/cdf-simulation/SKILL.md) |
 | Crop stage internals | [scripts/crop/README.md](scripts/crop/README.md) |
 
 ## Quick reference
