@@ -1424,10 +1424,8 @@ class PcbAoiOperationsSection(OperationsSection):
     ) -> PcbAoiOperationsSection:
         """Add dry-contact through-hole fillets: the solder does not ring the pin.
 
-        (Renamed from ``interrupted`` before the API 1.0.0 release: in
-        the AOI taxonomy "interrupted" means partially visible pad
-        structures, a different defect; the hole-in-the-solder one is dry
-        contact.)
+        Dry contact means a gap in the solder around the pin. It is distinct
+        from interrupted solder, which exposes portions of the pad.
 
         Through-hole only -- an SMT component selected here is reported
         INELIGIBLE by the solver rather than silently soldered nominal. The

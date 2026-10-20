@@ -74,6 +74,109 @@ class CdfApiVersionCheckTest(unittest.TestCase):
         self._git("add", ".")
         self._git("commit", "-m", "candidate")
 
+    def _released_base(self, source: str) -> str:
+        """Publish a guarded source fixture without changing the API version."""
+        self._write_contract("1.0.0", status="released")
+        (self.repo / "cdf/sections.py").write_text(source, encoding="utf-8")
+        self._commit_changes()
+        return self._git("rev-parse", "HEAD").strip()
+
+    def _commit_source(self, source: str) -> None:
+        (self.repo / "cdf/sections.py").write_text(source, encoding="utf-8")
+        self._commit_changes()
+
+    def test_comment_and_formatting_changes_do_not_require_bump(self) -> None:
+        base = self._released_base("API = 1\n")
+        self._commit_source("# Public API constant\n\nAPI=1  # unchanged\n")
+
+        self.assertEqual(check_api_version(self.repo, base), [])
+
+    def test_docstring_edits_do_not_require_bump(self) -> None:
+        source = (
+            '"""Old module documentation."""\n'
+            'class Section:\n'
+            '    """Old class documentation."""\n'
+            '    def run(self):\n'
+            '        """Old method documentation."""\n'
+            '        return 1\n'
+            '    async def async_run(self):\n'
+            '        """Old async method documentation."""\n'
+            '        return 1\n'
+        )
+        base = self._released_base(source)
+        self._commit_source(source.replace("Old", "Updated"))
+
+        self.assertEqual(check_api_version(self.repo, base), [])
+
+    def test_adding_and_removing_docstrings_do_not_require_bump(self) -> None:
+        plain = "def run():\n    return 1\n"
+        documented = 'def run():\n    """Explain the existing behavior."""\n    return 1\n'
+        base = self._released_base(plain)
+        self._commit_source(documented)
+        self.assertEqual(check_api_version(self.repo, base), [])
+
+        documented_base = self._git("rev-parse", "HEAD").strip()
+        self._commit_source(plain)
+        self.assertEqual(check_api_version(self.repo, documented_base), [])
+
+    def test_docstrings_do_not_hide_behavior_changes(self) -> None:
+        base = self._released_base('"""Old docs."""\nAPI = 1\n')
+        self._commit_source('"""Updated docs."""\nAPI = 2\n')
+
+        with self.assertRaisesRegex(VersionCheckError, "cannot be reused"):
+            check_api_version(self.repo, base)
+
+    def test_function_signature_changes_still_require_bump(self) -> None:
+        base = self._released_base("def run():\n    return 1\n")
+        self._commit_source("def run(value=1):\n    return value\n")
+
+        with self.assertRaisesRegex(VersionCheckError, "cannot be reused"):
+            check_api_version(self.repo, base)
+
+    def test_annotation_changes_still_require_bump(self) -> None:
+        base = self._released_base("def run(value: int):\n    return value\n")
+        self._commit_source("def run(value: str):\n    return value\n")
+
+        with self.assertRaisesRegex(VersionCheckError, "cannot be reused"):
+            check_api_version(self.repo, base)
+
+    def test_string_values_are_not_treated_as_docstrings(self) -> None:
+        base = self._released_base('DEFAULT = "old"\n')
+        self._commit_source('DEFAULT = "updated"\n')
+
+        with self.assertRaisesRegex(VersionCheckError, "cannot be reused"):
+            check_api_version(self.repo, base)
+
+    def test_non_docstring_expressions_still_require_bump(self) -> None:
+        base = self._released_base('API = 1\n"old expression"\n')
+        self._commit_source('API = 1\n"updated expression"\n')
+
+        with self.assertRaisesRegex(VersionCheckError, "cannot be reused"):
+            check_api_version(self.repo, base)
+
+    def test_added_guarded_file_still_requires_bump(self) -> None:
+        base = self._released_base("API = 1\n")
+        (self.repo / "cdf/job.py").write_text("JOB = 1\n", encoding="utf-8")
+        self._commit_changes()
+
+        with self.assertRaisesRegex(VersionCheckError, "cannot be reused"):
+            check_api_version(self.repo, base)
+
+    def test_deleted_guarded_file_still_requires_bump(self) -> None:
+        base = self._released_base("API = 1\n")
+        (self.repo / "cdf/sections.py").unlink()
+        self._commit_changes()
+
+        with self.assertRaisesRegex(VersionCheckError, "cannot be reused"):
+            check_api_version(self.repo, base)
+
+    def test_invalid_python_does_not_bypass_version_policy(self) -> None:
+        base = self._released_base("API = 1\n")
+        self._commit_source("def invalid syntax\n")
+
+        with self.assertRaisesRegex(VersionCheckError, "cannot be reused"):
+            check_api_version(self.repo, base)
+
     def test_api_change_requires_version_increase(self) -> None:
         (self.repo / "cdf/sections.py").write_text("API = 2\n", encoding="utf-8")
         self._commit_changes()

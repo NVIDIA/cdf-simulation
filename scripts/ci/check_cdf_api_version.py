@@ -13,11 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Require a CDF API version bump when its guarded surface changes."""
+"""Require a CDF API version bump for code changes in its guarded surface."""
 
 from __future__ import annotations
 
 import argparse
+import ast
 import os
 import re
 import subprocess
@@ -107,10 +108,38 @@ def _base_file(repo: Path, base_ref: str, path: Path) -> str | None:
     return result.stdout if result.returncode == 0 else None
 
 
+def _code_structure(contents: str, *, path: str) -> str:
+    """Compare Python structure without comments, formatting, or docstrings."""
+    tree = ast.parse(contents, filename=path)
+    for node in ast.walk(tree):
+        if isinstance(
+            node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        ) and ast.get_docstring(node, clean=False) is not None:
+            node.body = node.body[1:]
+    return ast.dump(tree, include_attributes=False)
+
+
+def _has_code_change(repo: Path, base_ref: str, path: str) -> bool:
+    """Keep additions, deletions, and unparseable guarded files subject to policy."""
+    before = _base_file(repo, base_ref, Path(path))
+    after = _base_file(repo, "HEAD", Path(path))
+    if before is None or after is None:
+        return True
+    try:
+        return _code_structure(before, path=path) != _code_structure(after, path=path)
+    except SyntaxError:
+        # Do not let unsupported or invalid Python syntax bypass version policy.
+        return True
+
+
 def check_api_version(repo: Path, base_ref: str) -> list[str]:
-    """Validate version policy and return the guarded paths that changed."""
+    """Validate version policy and return guarded paths with code changes."""
     changed = _git(repo, "diff", "--name-only", "--diff-filter=ACMRD", base_ref, "HEAD")
-    guarded = sorted(path for path in changed.splitlines() if is_guarded_api_path(path))
+    guarded = sorted(
+        path
+        for path in changed.splitlines()
+        if is_guarded_api_path(path) and _has_code_change(repo, base_ref, path)
+    )
     if not guarded:
         return []
 
@@ -171,7 +200,7 @@ def main() -> int:
         for path in guarded:
             print(f"- {path}")
     else:
-        print("No versioned CDF API files changed.")
+        print("No versioned CDF API code changes (comments/docstrings ignored).")
     return 0
 
 
