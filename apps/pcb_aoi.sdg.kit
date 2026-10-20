@@ -1,0 +1,74 @@
+[package]
+title = "PCB-AOI SDG"
+description = "Headless synthetic-data render: base minus what a board cannot use"
+version = "6.1.0"
+keywords = ["experience", "app", "usd", "isaacsim"]
+
+[dependencies]
+"isaacsim.exp.base" = {}
+
+[settings.app]
+name = "PCB-AOI SDG"
+version = "6.1.0"
+settings.persistent = false
+window.title = "PCB-AOI SDG"
+vulkan = true
+enableDeveloperWarnings = false
+
+[settings.app.extensions]
+# A PCB defect render is headless, has no robot and no articulation, and reads
+# its board from a local file. Each of these is either a UI surface with no
+# window to draw into, a robotics subsystem with nothing to drive, or a browser
+# with nobody to browse.
+#
+# `omni.kit.window.filepicker` and `isaacsim.sensors.experimental.rtx` are not
+# here for the same reason in smaller form: excluding them left 100 failed
+# imports in the boot log. An extension nothing USES is still an extension
+# something IMPORTS.
+#
+# `omni.kit.test` is NOT here and must not be. It starts in 0.54 s and every
+# extension that ships OmniGraph nodes imports it from its `ogn/tests` modules
+# at node-registration time -- excluding it produced 416 failed imports, each
+# with a full traceback, and took the boot from 42 s to 238 s.
+excluded = [
+    "isaacsim.cortex.behaviors",
+    "isaacsim.cortex.framework",
+    "isaacsim.gui.content_browser",
+    "isaacsim.gui.menu",
+    "isaacsim.gui.property",
+    "isaacsim.gui.sensors.icon",
+    "isaacsim.robot_motion.lula",
+    "isaacsim.robot_motion.motion_generation",
+    "isaacsim.robot_motion.experimental.motion_generation",
+    "isaacsim.robot_motion.cumotion",
+    "isaacsim.robot.manipulators",
+    "isaacsim.robot.policy.examples",
+    "isaacsim.robot.surface_gripper",
+    "isaacsim.robot.wheeled_robots",
+    "isaacsim.robot.wheeled_robots.nodes",
+    "isaacsim.robot.experimental.wheeled_robots",
+    "omni.simready.content.browser",
+    # A property panel with no panel to draw into. Profiling a solved render
+    # found its `_render_context_changed` spending 2.26 s reacting to a
+    # render-context change -- a RUNTIME cost, so it does not show in a boot
+    # comparison. Its neighbours `omni.kit.property.usd` and
+    # `omni.kit.window.property` are deliberately absent: excluding those left
+    # 26 failed imports.
+    "omni.kit.property.material",
+]
+
+[settings.app.exts.folders]
+# The shipped experiences write these against ${app}, which resolves to the
+# experience file's OWN directory -- so a copy of them outside the Isaac
+# install cannot find a single extension and the boot dies with SystemExit: 1.
+# This file lives in a git repository, not in `isaac-sim/apps`, so it anchors
+# on ${exe-path} instead: SimulationApp launches Kit with
+# `--/app/tokens/exe-path=<install>/kit`, which makes ${exe-path}/.. the
+# install root wherever this file is read from.
+'++' = [
+    "${exe-path}/../apps",
+    "${exe-path}/../exts",
+    "${exe-path}/../extscache",
+    "${exe-path}/../extsUser",
+    "${exe-path}/../extsDeprecated",
+]

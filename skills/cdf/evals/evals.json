@@ -1,0 +1,91 @@
+[
+  {
+    "id": "1",
+    "question": "Using the board _boards\\allegro_v6_1\\CAD_BOARD\\CAD_BOARD.usd, create a script that generates two tombstone defects on 0805 components",
+    "expected_skill": "cdf",
+    "ground_truth": "This is a declarative Python-authoring request, so the cdf skill creates a standalone CDFJob script. It discovers the board root, camera/light prims, and sibling pcb.components sidecar from repository data rather than inventing them. The script selects the board's actual 0805 component family, requests exactly two tombstones with count=2, uses a deterministic random seed, enables component and defect annotations, and configures a 1x1 capture. Its default path calls compile(); rendering is opt-in through an explicit --execute flag.",
+    "expected_behavior": [
+      "Routes to cdf because the user explicitly requested a Python script, not a YAML/Docker workflow.",
+      "Uses import pcb_aoi before constructing cdf.CDFJob and follows the API specification's declaration order.",
+      "Discovers the actual board root, sidecar, prim paths, and 0805 family; it does not invent reference designators or component types.",
+      "Calls add_tombstone(count=2, ...) without also passing ratio; exact-count execution fails clearly if fewer than two eligible components remain.",
+      "Calls label_components() and enable_operation_labels(), and requests the corresponding semantic output.",
+      "Uses scan_grid(x_count=1, y_count=1), defaults to compile-only validation, and requires an explicit --execute flag to launch rendering."
+    ]
+  },
+  {
+    "id": "2",
+    "question": "Create a reusable CDF Python template for rendering a board with randomized ring lighting. I will supply the board and output paths later.",
+    "expected_skill": "cdf",
+    "ground_truth": "The cdf skill creates a complete reusable Python script with argparse inputs for unresolved board-specific values. It configures CDFJob scene, lighting, and capture sections using documented public calls. Because concrete paths are intentionally unavailable, it leaves explicit CLI arguments or conspicuous placeholders instead of copying machine-specific paths. The default execution path validates with compile(); rendering requires --execute.",
+    "expected_behavior": [
+      "Produces a complete Python script rather than YAML commands.",
+      "Uses argparse and pathlib.Path for unresolved board, root-prim, and output values.",
+      "Does not invent USD prim paths or copy machine-specific values from an unrelated example.",
+      "Configures ring lighting with only documented lighting keys and ordered numeric ranges.",
+      "Keeps job construction free of execution side effects and makes rendering explicitly opt-in."
+    ]
+  },
+  {
+    "id": "3",
+    "question": "Create a CDF script for a tombstone dataset with RGB, tight 2D boxes, semantic segmentation, and per-component crops.",
+    "expected_skill": "cdf",
+    "ground_truth": "The cdf skill creates a declarative defect-and-crop job. Component selection precedes the tombstone operation and annotations. It enables component labels and a defect operation-label namespace, requests RGB, bounding_box_2d_tight, and semantic_segmentation with matching semantic_types, then declares postprocess.crop() with rgb and semantic_segmentation using method=bbox_tight. It does not combine missing-component behavior with the transform defect.",
+    "expected_behavior": [
+      "Uses the cdf Python API and preserves scene, selection, operation, annotation, capture, and postprocess ordering.",
+      "Enables bounding_box_2d_tight plus semantic output before requesting bbox_tight crops.",
+      "Uses matching semantic artifact names in capture outputs and postprocess.crop types.",
+      "Enables operation labels for the tombstone defect namespace.",
+      "Does not add a missing-component operation or unsupported annotator names."
+    ]
+  },
+  {
+    "id": "4",
+    "question": "Use CDFJob to set up the board, lights, tombstone defects, and annotations, then let my code perform a vertical camera sweep and capture each view.",
+    "expected_skill": "cdf",
+    "ground_truth": "The cdf skill can generate a Python integration script that separates declarative scenario construction from the caller's custom capture loop. It must explain that CDF annotations are automatically associated with captures made through the configured CDF execution path; arbitrary external capture code must explicitly preserve or configure the required annotators and consume the relevant job/stage results. It must not promise that annotations automatically follow captures performed by an unrelated renderer.",
+    "expected_behavior": [
+      "Builds the scenario in a side-effect-free function returning CDFJob.",
+      "Uses only a compatible compile_orders()/render_async() integration when in-process stage access or solder generation requires JobOrders.",
+      "Keeps custom camera-sweep logic separate from declarative job construction.",
+      "States that external capture code owns camera movement, writer invocation, frame naming, and annotator preservation.",
+      "Does not claim that arbitrary external renders automatically receive CDF annotations."
+    ]
+  },
+  {
+    "id": "5",
+    "question": "Write a Python script that validates my CDF scene and capture configuration without writing files or starting Isaac Sim.",
+    "expected_skill": "cdf",
+    "ground_truth": "The cdf skill generates a script that constructs the job and calls CDFJob.compile(output_dir=None). It reports the returned JobPlan as validation output. It does not call capture.render(), write legacy YAML, launch Isaac Sim, or claim that images were rendered.",
+    "expected_behavior": [
+      "Uses job.compile(output_dir=None) as the single execution path.",
+      "Does not call capture.render() or render_async().",
+      "Clearly describes the result as configuration validation, not a render or dry-run file generation.",
+      "Preserves all required capture declarations so compilation can validate the job."
+    ]
+  },
+  {
+    "id": "6",
+    "question": "Generate solder joints for the selected components and save the authored geometry with a CDF Python script.",
+    "expected_skill": "cdf",
+    "ground_truth": "The cdf skill attaches a pcb.components sidecar, selects components, queries get_solder_joint_solvers() rather than inventing a solver ID, and configures solder_joints() with a compatible available solver and serialization settings. Because solder generation requires JobOrders, it uses compile_orders() for validation or render_async() for execution and never uses legacy compile() or capture.render().",
+    "expected_behavior": [
+      "Requires and attaches a pcb.components sidecar before configuring solder joints.",
+      "Queries solver availability and selects only an available compatible solver.",
+      "Uses an absolute non-root output prim path and valid serialization/path pairing when serialization is requested.",
+      "Uses compile_orders() or render_async(), never legacy compile() or capture.render().",
+      "Does not execute Isaac merely to validate the generated script."
+    ]
+  },
+  {
+    "id": "8",
+    "question": "Generate 50 paired golden and defect images for ChangeNet using the existing YAML and Docker pipeline.",
+    "expected_skill": "simulation",
+    "ground_truth": "This explicitly requests the repository's YAML and Docker batch workflow, so it routes to simulation. The cdf skill must not replace that workflow with a Python CDFJob script.",
+    "expected_behavior": [
+      "Routes to simulation rather than cdf.",
+      "Uses the established YAML/Docker paired-dataset workflow.",
+      "Does not generate a declarative Python script unless the user separately requests one."
+    ]
+  }
+]

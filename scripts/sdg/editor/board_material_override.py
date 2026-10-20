@@ -15,12 +15,19 @@
 
 """
 board_material_override.py — runtime override of the PCB-substrate
-materials at ``/World/pcba_main_s_detail/Looks/{SolderMask, Silkscreen,
-OuterConductor, SolderPaste, InnerConductor, Dielectric}``.
+materials at ``<looks_root>/{SolderMask, Silkscreen, OuterConductor,
+SolderPaste, InnerConductor, Dielectric}``.
+
+``looks_root`` is supplied by the caller (yaml ``board_looks_root``, the
+editor field, or :func:`find_board_looks_root`). The module names no board:
+the asset layer and its internal namespace are read off the shader prims'
+own composition stack, so any board whose substrate materials carry these
+six names works without a code change.
 
 Mirrors the pattern in ``component_material_override.py``:
 
-  1. Find the ``pcba_main_s_detail`` layer in ``stage.GetUsedLayers()``.
+  1. Resolve the substrate shader prims under ``looks_root`` and read the
+     layer that authors them off ``prim.GetPrimStack()``.
   2. Create an **anonymous Sdf sublayer**, pre-create over-prim specs at
      each board shader path, and insert it as the strongest sublayer
      (index 0) of the pcba layer.
@@ -44,14 +51,13 @@ Two non-obvious correctness requirements (each cost a debug session):
   conventions so anything downstream that reads either still finds
   values.
 
-* The anon sublayer is a sublayer of ``pcba_main_s_detail.usd``,
-  NOT of the parent stage. The pcba layer's internal namespace is
-  ``/World/Looks/<MatName>/Shader`` — the parent stage references
-  the layer's ``/World`` subtree at ``/World/pcba_main_s_detail/...``
-  which is why the LIVE-stage path has the extra prefix. Override
-  prim specs in our anon must use the layer-internal path
-  (``/World/Looks/...``); writing them at ``/World/pcba_main_s_detail/Looks/...``
-  composes into nothing.
+* The anon sublayer is a sublayer of the **board asset layer**, NOT of
+  the parent stage. That layer's internal namespace usually strips the
+  asset xform the parent stage references it under, so the live path
+  ``<looks_root>/<MatName>/Shader`` and the layer-internal path differ.
+  Override prim specs in our anon must use the layer-internal path;
+  writing them at the live path composes into nothing. Both come from
+  the shader prim's own ``GetPrimStack()``, so neither is guessed at.
 
 To make a "vantablack" board that stays dark even under intense
 ring-light illumination, set ``specular_weight = 0`` AND
@@ -64,19 +70,7 @@ energy. (See the "vantablack" demo overrides in
 
 from __future__ import annotations
 
-from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
-
-_BASE = "/World/pcba_main_s_detail/Looks"
-
-# Inside ``pcba_main_s_detail.usd`` (the layer that defines the substrate
-# materials), the shader prims live at ``/World/Looks/<name>/Shader``.
-# The parent stage references that subtree at
-# ``/World/pcba_main_s_detail/...`` which is why the LIVE-stage path has
-# the extra prefix. When we author override prims into a sublayer of
-# pcba_main_s_detail.usd we must use the layer-internal path
-# (``_LAYER_BASE``), NOT the live-stage path (``_BASE``); composition
-# only picks up specs that align with the host layer's namespace.
-_LAYER_BASE = "/World/Looks"
+from pxr import Gf, Sdf, Usd, UsdGeom
 
 _MATERIALS = (
     "SolderMask",
@@ -136,30 +130,124 @@ _FALLBACK = {
 }
 
 
-# Substrate prims that aren't part of the standard 6 board materials
-# but the user wants to look exactly like the Dielectric (pure black).
-# We rebind their ``material:binding`` to the Dielectric Material so
-# the existing Diel R/G/B/rough/metal sliders drive them too.
-EXTRA_BLACKOUT_PRIMS = (
-    "/World/pcba_main_s_detail/PCB/TOP/TOP/Geometry/TOP__5820_bodies__0/TOP_Model_1546_Inst_7/Mesh_6",
-    "/World/pcba_main_s_detail/PCB/BOARD/DIELECTRIC/Geometry/DIELECTRIC__1_bodies__0/DIELECTRIC_Model_1_Inst_1/Mesh_0",
-    "/World/pcba_main_s_detail/PCB/TOP/TOP/Geometry/TOP__5820_bodies__0/TOP_Model_1529_Inst_24/Mesh_23",
-)
-
-_PCBA_LIVE_PREFIX = "/World/pcba_main_s_detail"
-_PCBA_LAYER_PREFIX = "/World"  # pcba_main_s_detail.usd's namespace strips the asset xform
+# Substrate prims that aren't part of the standard 6 board materials but
+# that the user wants to look exactly like the Dielectric (pure black).
+# These are per-board mesh paths deep inside one asset's reference chain,
+# so the list is EMPTY here and comes from yaml (``extra_blackout_prims:``)
+# or the editor field. A default would name meshes that exist on exactly
+# one board and silently miss on every other.
+EXTRA_BLACKOUT_PRIMS = ()
 
 
-def _live_to_layer_path(live_path: str) -> str:
-    """Strip the live-stage ``/World/pcba_main_s_detail`` prefix so the
-    path lines up with the pcba layer's internal namespace, where our
-    anon sublayer authors overrides."""
-    if live_path.startswith(_PCBA_LIVE_PREFIX):
-        return _PCBA_LAYER_PREFIX + live_path[len(_PCBA_LIVE_PREFIX) :]
-    return live_path
+def _looks_scope_matches(prim: Usd.Prim) -> bool:
+    """True when ``prim`` is a Looks scope defining a substrate material."""
+    return (
+        bool(prim)
+        and prim.IsValid()
+        and any(prim.GetChild(nm).IsValid() for nm in _MATERIALS)
+    )
 
 
-def apply_params_from_dict(state: _State, d: dict) -> None:
+def find_board_looks_root(stage: Usd.Stage, pcba_root: str = "") -> str | None:
+    """Return the ``Looks`` scope holding the substrate materials, or None.
+
+    With ``pcba_root``, walks up from it — the board assembly sits beside the
+    asset's ``Looks`` scope, not under it — and returns the first ancestor
+    whose ``Looks`` child defines at least one of :data:`_MATERIALS`.
+
+    Without it, the stage is scanned. Several scopes can match on a panel that
+    places the same asset more than once; those all resolve to one asset layer,
+    so any of them authors the same override and the first is returned. Scopes
+    belonging to **different** assets are a real ambiguity — which board did the
+    caller mean? — and None is returned rather than one picked, so the caller
+    names ``board_looks_root`` instead of silently styling the wrong board.
+
+    Args:
+        stage: Composed stage.
+        pcba_root: Optional board-root prim path from the pcba target config.
+
+    Returns:
+        Absolute path of the ``Looks`` scope, or None when none matches or the
+        stage holds more than one board.
+    """
+    if pcba_root:
+        prim = stage.GetPrimAtPath(pcba_root)
+        while prim and prim.IsValid() and prim.GetPath() != Sdf.Path.absoluteRootPath:
+            if _looks_scope_matches(prim.GetChild("Looks")):
+                return str(prim.GetPath().AppendChild("Looks"))
+            prim = prim.GetParent()
+        return None
+    found: list[str] = []
+    layers: set[str] = set()
+    for prim in stage.TraverseAll():
+        if prim.GetName() != "Looks" or not _looks_scope_matches(prim):
+            continue
+        found.append(str(prim.GetPath()))
+        spec = _authoring_spec(prim, stage)
+        layers.add(spec.layer.identifier if spec else "")
+    if not found or len(layers) > 1:
+        return None
+    return found[0]
+
+
+def resolve_board_layer(stage: Usd.Stage, board_root: str = "") -> Sdf.Layer | None:
+    """Return the asset layer that authors the board, or None.
+
+    With ``board_root``, that is the layer holding the strongest spec for the
+    board-root prim. Without it, the stage is walked breadth-first down to the
+    shallowest prims authored outside the stage's own root/session layers —
+    the top-level referenced assets. One asset there is the board; two or more
+    distinct ones are an ambiguity, and None is returned rather than one
+    picked, so the caller passes ``board_root`` instead of overriding whichever
+    asset happened to be traversed first. Either way the layer is identified by
+    composition rather than by a filename, so no board name appears here.
+
+    Args:
+        stage: Composed stage.
+        board_root: Optional board-root prim path from the pcba target config.
+
+    Returns:
+        The board asset layer, or None when the stage references none or
+        references several.
+    """
+    if board_root:
+        prim = stage.GetPrimAtPath(board_root)
+        if prim and prim.IsValid():
+            spec = _authoring_spec(prim, stage)
+            return spec.layer if spec else None
+        return None
+    frontier = list(stage.GetPseudoRoot().GetAllChildren())
+    while frontier:
+        found: dict[str, Sdf.Layer] = {}
+        deeper: list[Usd.Prim] = []
+        for prim in frontier:
+            spec = _authoring_spec(prim, stage)
+            if spec is not None:
+                found.setdefault(spec.layer.identifier, spec.layer)
+            else:
+                deeper.extend(prim.GetAllChildren())
+        if found:
+            return next(iter(found.values())) if len(found) == 1 else None
+        frontier = deeper
+    return None
+
+
+def _authoring_spec(prim: Usd.Prim, stage: Usd.Stage):
+    """Return the strongest prim spec authored in a referenced asset layer.
+
+    The stage's own root and session layers hold runtime opinions, not the
+    asset. Skipping them lands on the layer that actually defines the
+    material — the one our anon sublayer must attach to, and whose internal
+    namespace the override specs must use.
+    """
+    skip = {stage.GetRootLayer().identifier, stage.GetSessionLayer().identifier}
+    for spec in prim.GetPrimStack():
+        if spec.layer.identifier not in skip:
+            return spec
+    return None
+
+
+def apply_params_from_dict(state: _State, d: dict) -> set[str]:
     """Translate a yaml-shaped or UI-slider-shaped dict into a
     ``state.apply(**per_material)`` call.
 
@@ -182,11 +270,17 @@ def apply_params_from_dict(state: _State, d: dict) -> None:
     (lowercased; underscores allowed for camelCase names).
     """
     # Build a per-material accumulator; both input shapes feed it.
+    # Which of the caller's keys actually reached a material. Returned so
+    # the op can tell "applied" from "ignored": every unmatched key used to
+    # be dropped in silence and then echoed back as applied, so a typo
+    # ("soldermask_colour_r") and a real change were indistinguishable.
+    consumed: set[str] = set()
     per_mat: dict[str, dict] = {}
     for nm in _MATERIALS:
         sub = d.get(nm)
         if isinstance(sub, dict):
             per_mat[nm] = dict(sub)
+            consumed.add(nm)
 
     # Map material name → its slider-prefix.
     flat_prefix = {
@@ -199,18 +293,22 @@ def apply_params_from_dict(state: _State, d: dict) -> None:
     }
     for nm, pref in flat_prefix.items():
         bucket = per_mat.setdefault(nm, {})
-        r = d.get(f"{pref}_color_r")
-        g = d.get(f"{pref}_color_g")
-        b = d.get(f"{pref}_color_b")
-        if r is not None and g is not None and b is not None:
-            bucket["color"] = [float(r), float(g), float(b)]
+        channels = {c: d.get(f"{pref}_color_{c}") for c in ("r", "g", "b")}
+        if all(value is not None for value in channels.values()):
+            bucket["color"] = [float(channels[c]) for c in ("r", "g", "b")]
+            consumed.update(f"{pref}_color_{c}" for c in ("r", "g", "b"))
+        # A partial colour is NOT consumed: USD needs all three channels,
+        # so r+g without b changes nothing, and counting it as applied
+        # would report a colour change that did not happen.
         for f in ("roughness", "metallic", "diffuse_weight", "specular_weight"):
             key = f"{pref}_{f}"
             if key in d:
                 bucket[f] = float(d[key])
+                consumed.add(key)
         if not bucket:
             per_mat.pop(nm, None)
     state.apply(**per_mat)
+    return consumed
 
 
 def state_to_flat_dict(state: _State) -> dict:
@@ -254,6 +352,11 @@ class _State:
     """Holds the anonymous override sublayer + helpers for ``apply()``."""
 
     def __init__(self) -> None:
+        #: Composed-stage path of the substrate Looks scope; set by
+        #: setup() from the caller's ``looks_root``. Empty until then --
+        #: this module names no board, so there is no default to fall back
+        #: to (see find_board_looks_root).
+        self.looks_root: str = ""
         self.pcba_layer: Sdf.Layer | None = None
         self.anon: Sdf.Layer | None = None
         self.ready: bool = False
@@ -268,67 +371,91 @@ class _State:
         self._last_per_material: dict[str, dict] = {}
 
     def _find_shader_path(
-        self, stage: Usd.Stage, mat_name: str
-    ) -> tuple[Sdf.Path, Sdf.Path] | None:
-        """Return ``(stage_path, layer_path)``:
-        * ``stage_path`` — composed-stage path used to look up the
-          prim during ``setup()`` validation
-          (``/World/pcba_main_s_detail/Looks/<m>/<sh>``).
-        * ``layer_path`` — pcba_main_s_detail.usd's internal path
-          for the same prim (``/World/Looks/<m>/<sh>``); this is
-          the path we write override specs at.
+        self, stage: Usd.Stage, looks_root: str, mat_name: str
+    ) -> tuple[Sdf.Path, Sdf.Path, Sdf.Layer] | None:
+        """Return ``(stage_path, layer_path, layer)``:
+        * ``stage_path`` — composed-stage path used to look up the prim
+          during ``setup()`` validation (``<looks_root>/<m>/<sh>``).
+        * ``layer_path`` — the same prim's path *inside* the asset layer;
+          this is where we write override specs.
+        * ``layer`` — that asset layer.
+
+        Both the path and the layer come from the prim's composition stack
+        rather than from a name, so an asset whose internal namespace
+        differs from the live one still resolves.
         """
-        mat_prim = stage.GetPrimAtPath(f"{_BASE}/{mat_name}")
+        mat_prim = stage.GetPrimAtPath(f"{looks_root}/{mat_name}")
         if not mat_prim or not mat_prim.IsValid():
             return None
         for c in mat_prim.GetAllChildren():
-            if c.GetTypeName() == "Shader":
-                shader_name = c.GetName()
-                stage_path = c.GetPath()
-                layer_path = Sdf.Path(f"{_LAYER_BASE}/{mat_name}/{shader_name}")
-                return (stage_path, layer_path)
+            if c.GetTypeName() != "Shader":
+                continue
+            spec = _authoring_spec(c, stage)
+            if spec is None:
+                return None
+            return (c.GetPath(), Sdf.Path(str(spec.path)), spec.layer)
         return None
 
     def setup(
         self,
         stage: Usd.Stage,
+        looks_root: str,
         extra_blackout_prim_paths: list[str] | tuple[str, ...] | None = None,
         extra_blackout_enabled: bool = True,
+        substrate_root: str = "",
     ) -> tuple[bool, dict | str]:
         """Wire the override sublayer + (optionally) hide a list of
         substrate prims that can't be rebound through normal layer
-        composition. Defaults to module-level :data:`EXTRA_BLACKOUT_PRIMS`
-        when ``extra_blackout_prim_paths`` is None; pass an explicit list
-        to override per-yaml. Set ``extra_blackout_enabled=False`` to
-        skip the MakeInvisible step (e.g. when the user toggles the UI
-        slider off).
+        composition.
+
+        ``looks_root`` is the scope holding the six substrate materials —
+        pass it from yaml (``board_looks_root``) or from
+        :func:`find_board_looks_root`. ``extra_blackout_prim_paths`` lists
+        per-board mesh paths to hide; it defaults to the module-level
+        :data:`EXTRA_BLACKOUT_PRIMS`, which is empty. Set
+        ``extra_blackout_enabled=False`` to skip the MakeInvisible step
+        (e.g. when the user toggles the UI slider off).
+
+        ``substrate_root`` is the composed-stage path of the
+        substrate scope. Empty means the board's own substrate scope
+        — where the batch pipeline finds it when it opens the board as the
+        root layer. A parent stage may reference the board under
+        ``/World/Board_<name>/``; without being told,
+        setup found the layer, found no materials in it, and reported "no
+        board materials found" about a board that has all six. Deliberately
+        a PATH and not a prefix: the referenced layer's own ``/World`` is
+        collapsed into the reference, so prefixing would double it.
 
         Returns ``(ok, info)``."""
+        self.looks_root = (
+            str(substrate_root).rstrip("/") + "/Looks" if substrate_root else looks_root
+        )
         self.pcba_layer = None
-        for layer in stage.GetUsedLayers():
-            if "pcba_main_s_detail" in layer.identifier:
-                self.pcba_layer = layer
-                break
-        if not self.pcba_layer:
-            return False, "pcba_main_s_detail layer not found in GetUsedLayers()"
+        if not looks_root:
+            return False, "board material override needs a looks_root"
 
         info: dict = {}
         self._shader_path.clear()
         for nm in _MATERIALS:
-            sp = self._find_shader_path(stage, nm)
+            sp = self._find_shader_path(stage, looks_root, nm)
             if sp is None:
                 info[nm] = "Material or Shader not found at expected path; skipping"
                 continue
-            stage_path, layer_path = sp
+            stage_path, layer_path, layer = sp
+            if self.pcba_layer is None:
+                self.pcba_layer = layer
+            elif layer.identifier != self.pcba_layer.identifier:
+                info[nm] = f"authored in a second layer ({layer.identifier}); skipping"
+                continue
             self._shader_path[nm] = layer_path
             info[nm] = f"{stage_path} ↔ {layer_path}"
 
         if not self._shader_path:
-            return False, "no board materials found at /World/pcba_main_s_detail/Looks/<...>/Shader"
+            return False, f"no board materials found at {looks_root}/<...>/Shader"
 
         # Anon layer with one over-prim per resolved shader. Paths
-        # MUST be the layer-internal paths (no /World/pcba_main_s_detail
-        # prefix); see the module docstring for the why.
+        # MUST be the layer-internal paths (no live-stage asset prefix);
+        # see the module docstring for the why.
         self.anon = Sdf.Layer.CreateAnonymous(".usda")
         for sp in self._shader_path.values():
             if not sp:
@@ -409,7 +536,7 @@ class _State:
             spec.specifier = Sdf.SpecifierOver
         per_path = self._pcba_restore.setdefault(str(prim_path), {})
         if attr_name not in per_path:
-            existing = spec.attributes[attr_name] if attr_name in spec.attributes else None
+            existing = spec.attributes.get(attr_name, None)
             per_path[attr_name] = existing.default if existing is not None else _UNSET
         if attr_name in spec.attributes:
             spec.attributes[attr_name].default = value
@@ -421,7 +548,9 @@ class _State:
                 Sdf.VariabilityVarying,
             ).default = value
 
-    def _set_pcba_binding(self, prim_path: Sdf.Path, target_material_path: Sdf.Path) -> None:
+    def _set_pcba_binding(
+        self, prim_path: Sdf.Path, target_material_path: Sdf.Path
+    ) -> None:
         """Force-bind the prim at ``prim_path`` to ``target_material_path``
         by writing ``material:binding`` (and per-purpose variants) directly
         into pcba_layer. pcba's own opinions beat its sublayers + any
@@ -472,7 +601,9 @@ class _State:
             return
         # Snapshot for state_to_flat_dict.
         self._last_per_material = {
-            nm: dict(spec) for nm, spec in per_material.items() if isinstance(spec, dict)
+            nm: dict(spec)
+            for nm, spec in per_material.items()
+            if isinstance(spec, dict)
         }
         with Sdf.ChangeBlock():
             for nm in self._shader_path:
@@ -518,7 +649,10 @@ class _State:
                 # OmniSurface names so a cached MDL layer still sees
                 # values either way.
                 self._set(
-                    shader_path, "inputs:diffuse_color_constant", color, Sdf.ValueTypeNames.Color3f
+                    shader_path,
+                    "inputs:diffuse_color_constant",
+                    color,
+                    Sdf.ValueTypeNames.Color3f,
                 )
                 self._set(
                     shader_path,
@@ -526,13 +660,20 @@ class _State:
                     rough,
                     Sdf.ValueTypeNames.Float,
                 )
-                self._set(shader_path, "inputs:metallic_constant", metal, Sdf.ValueTypeNames.Float)
+                self._set(
+                    shader_path,
+                    "inputs:metallic_constant",
+                    metal,
+                    Sdf.ValueTypeNames.Float,
+                )
                 # Kill OmniPBR's residual Fresnel: F0 = mix(0.04, color,
                 # metallic) is non-zero even at metallic=0 + color=(0,0,0)
                 # because the dielectric baseline is 0.04. Multiplying
                 # F0 by 0 → no specular at any angle → fully matte
                 # vantablack.
-                self._set(shader_path, "inputs:specular_level", 0.0, Sdf.ValueTypeNames.Float)
+                self._set(
+                    shader_path, "inputs:specular_level", 0.0, Sdf.ValueTypeNames.Float
+                )
                 # OmniSurface-native (older) — left in for
                 # back-compat with consumers that don't follow the MDL swap.
                 self._set(
@@ -559,7 +700,9 @@ class _State:
                     color,
                     Sdf.ValueTypeNames.Color3f,
                 )
-                self._set(shader_path, "inputs:metalness", metal, Sdf.ValueTypeNames.Float)
+                self._set(
+                    shader_path, "inputs:metalness", metal, Sdf.ValueTypeNames.Float
+                )
                 if d_w is not None:
                     self._set(
                         shader_path,
@@ -597,7 +740,7 @@ class _State:
                     im.MakeInvisible()
                 else:
                     im.MakeVisible()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110
                 pass
 
     def teardown(self) -> None:
@@ -619,7 +762,7 @@ class _State:
                 if p and p.IsValid():
                     try:
                         p.SetInstanceable(bool(items["INSTANCEABLE"]))
-                    except Exception:  # noqa: BLE001
+                    except Exception:  # noqa: BLE001, S110
                         pass
 
         # 2) Restore pcba-layer attrs + rels we mutated directly (MDL swap
@@ -651,7 +794,7 @@ class _State:
                                 del spec.attributes[attr_name]
                             else:
                                 spec.attributes[attr_name].default = original
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110
                 pass
         self._pcba_restore.clear()
 
@@ -661,7 +804,7 @@ class _State:
                 if self.anon.identifier in paths:
                     paths.remove(self.anon.identifier)
                     self.pcba_layer.subLayerPaths[:] = paths
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110
                 pass
         self.ready = False
         self.anon = None

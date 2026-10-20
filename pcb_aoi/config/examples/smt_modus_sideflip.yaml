@@ -1,0 +1,70 @@
+# Sideflip the single SMT coupon component under the Modus light -- a 2D-dome
+# linear AOI illuminator (six RectLights on an arc, white/red/blue centre-out)
+# instead of the tri-colour ring the other examples use. YAML equivalent of
+# tests/functional/test_smt_modus_sideflip.py.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 7
+
+output_dir: ../../../sdg_test_output/examples/smt-modus-sideflip/output_dir
+
+scene:
+  usd: /path/to/your_board.usdc  # EDIT ME -- this release ships no board; see README.md
+  root: /Board
+  camera: /World/camera_light/Camera
+  camera_xform: /World/camera_light
+  ring_light: /World/camera_light/aoi_ring_light
+  components:
+    types: [C_0805_2012Metric]
+
+appearance:
+  lighting:
+    mode: modus_light
+    exposure: 0.0
+    modus:
+      arc_radius_scale: 1.5
+      height_scale: 2.0
+      width_frac: 0.12
+      intensities: {white: 6000.0, red: 9000.0, blue: 9000.0}
+      colors:
+        white: [1.0, 1.0, 1.0]
+        red: [1.0, 0.0, 0.0]
+        blue: [0.0, 0.0, 1.0]
+  vantablack_components: false
+
+operations:
+  sideflip:
+    ratio: 1.0
+    angle: [70.0, 90.0]
+
+annotations:
+  components: true
+  operation_labels: defect
+
+capture:
+  output_start: 0
+  renderer:
+    mode: pathtracing
+    resolution: [640, 360]
+    spp: 1
+    total_spp: 4
+    max_bounces: 4
+  camera:
+    side: top
+    rotation: {x: 0.0, y: 0.0, z: -90.0}
+  scan_grid: [1, 1]
+  limits: {triggers: 1, max_images: 1}
+  outputs:
+    annotators: [rgb, bounding_box_2d_tight, semantic_segmentation]
+    semantic_types: [defect]
+    colorize: [semantic_segmentation]
+
+postprocess:
+  crop:
+    method: bbox_tight
+    types: [rgb, semantic_segmentation, component_instance]
+    offset: 32
+    min_coverage: 0.2
+    class_filter: [sideflip]
+    xform_depth: 7
+    output_subdir: sideflip_closeups

@@ -1,0 +1,51 @@
+Register the SDF collider in Evolver's user-function slots.
+
+sdf_collider.c is copied into src/ by build.sh and #included from userfunc.c
+rather than compiled separately, so it inherits REAL and SDIM from Evolver's own
+headers. A separately-compiled unit could disagree about the float type (e.g.
+-DLONGDOUBLE) and the mismatch would be silent numerical garbage, not a link
+error. It also avoids touching the Makefile's object list.
+
+Slot map:  usr1 usr2 = upstream demos (kept, so nothing that used them breaks)
+           usr3      = SDF collider 1   <- ./sdf_1.bin  or $EVOLVER_SDF_1
+           usr4      = SDF collider 2   <- ./sdf_2.bin  or $EVOLVER_SDF_2
+
+--- a/src/userfunc.c
++++ b/src/userfunc.c
+@@ -26,6 +26,12 @@
+ 
+ #include "include.h"
+ 
++/* Dense-grid SDF colliders (NVIDIA CDF). #included, not compiled separately,
++   so REAL and SDIM come from include.h above and cannot disagree with the rest
++   of the binary -- a mismatch there would be silent numerical garbage, not a
++   link error. Defines sdf1/sdf2 (+_deriv/_seconds) and sdf_reset_all(). */
++#include "sdf_collider.c"
++
+ /**************************************************************************/
+ 
+ /**************************************************************************
+@@ -39,6 +45,10 @@
+ void userfunc_init()
+ {
+   /* do whatever it takes to initialize user functions */
++
++  /* Drop any loaded grid so `load`ing another datafile in the same session
++     re-reads it instead of inheriting the previous surface's collider. */
++  sdf_reset_all();
+   
+   /*  Example of error reporting. 
+   kb_error(2201,"Error in userfunc_init\n",RECOVERABLE);
+@@ -157,9 +167,9 @@
+ 
+ /* Add your functions to these arrays; this is how they will be invoked! */
+ 
+-REAL (*userfunc[])(REAL*) = {usr1,usr_poly};
+-REAL (*userfunc_deriv[])(REAL*,REAL*) = {usr1_deriv,usr_poly_grad};
+-REAL (*userfunc_seconds[])(REAL*,REAL*,REAL**) = {usr1_seconds,usr_poly_hess};
++REAL (*userfunc[])(REAL*) = {usr1,usr_poly,sdf1,sdf2};
++REAL (*userfunc_deriv[])(REAL*,REAL*) = {usr1_deriv,usr_poly_grad,sdf1_deriv,sdf2_deriv};
++REAL (*userfunc_seconds[])(REAL*,REAL*,REAL**) = {usr1_seconds,usr_poly_hess,sdf1_seconds,sdf2_seconds};
+ 
+ 
+ /*********************************************************************

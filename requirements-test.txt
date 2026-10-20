@@ -1,0 +1,5 @@
+# Test-only dependencies that are not required by the runtime container.
+# Keep versions pinned so CI lanes are reproducible.
+opencv-python-headless==5.0.0.93
+pip-audit==2.10.1
+unittest-xml-reporting==4.0.0

@@ -1,0 +1,6 @@
+# Build products of third_party/evolver/build.sh -- staged sources/objects and
+# the installed binary. The vendored SOURCE (third_party/evolver/upstream) is
+# tracked; what gets compiled from it is not.
+third_party/evolver/.build/
+vendor/
+.dumps/

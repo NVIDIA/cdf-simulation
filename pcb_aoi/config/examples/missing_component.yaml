@@ -1,0 +1,42 @@
+# Remove a selected PCB component and capture RGB plus defect semantics using
+# its embedded USD-schema metadata for deterministic selection and annotation.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 13
+
+output_dir: ../../../sdg_test_output/examples/missing-component/output_dir
+
+scene:
+  usd: /path/to/your_board.usdc  # EDIT ME -- this release ships no board; see README.md
+  root: /Board
+  components:
+    types: [C_0805_2012Metric]
+
+appearance:
+  lighting:
+    mode: white_light
+    dome:
+      intensity: 1000.0
+      visible: true
+
+operations:
+  missing:
+    ratio: 1.0
+
+annotations:
+  components: true
+  operation_labels: defect
+
+capture:
+  renderer:
+    resolution: [640, 360]
+    total_spp: 4
+  camera:
+    side: top
+    rotation: {x: 0.0, y: 0.0, z: -90.0}
+  scan_grid: [1, 1]
+  limits: {triggers: 1, max_images: 1}
+  outputs:
+    annotators: [rgb, semantic_segmentation]
+    semantic_types: [class, defect]
+    colorize: [semantic_segmentation]

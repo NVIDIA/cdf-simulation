@@ -1,0 +1,61 @@
+# SQA prompt P07 -- catalog row 4, "Using the attached USD, generate sideflip
+# structural defects with full board coverage", ICT_C0805_C22_coupon.usdc
+# attached. Same shape as the tombstone case; sideflip has no component_types
+# of its own, so the selection is the scope.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 0
+
+output_dir: ../../../sdg_test_output/skill_prompts/row4-sideflip
+
+scene:
+  usd: ../resources/ICT_C0805_C22_coupon.usdc
+  root: /Board
+  components:
+    types: [C_0805_2012Metric]
+
+appearance:
+  lighting:
+    mode: white_light
+    exposure: 0.0
+    cone_angle: 120.0
+    cone_softness: 1.0
+    dome:
+      intensity: 1000.0
+      visible: true
+
+operations:
+  sideflip:
+    ratio: 1.0
+    angle: [70.0, 90.0]
+
+annotations:
+  components: true
+  # Rows 4 and 5 are reported as per-component defect crops: the defect
+  # class goes into the segmentation output and a bbox_tight crop follows.
+  operation_labels: defect
+
+capture:
+  renderer:
+    mode: pathtracing
+    resolution: [640, 360]
+    spp: 1
+    total_spp: 4
+    max_bounces: 4
+  camera:
+    side: top
+    rotation: {z: 0.0}
+  scan_grid: [1, 1]
+  outputs:
+    annotators: [rgb, bounding_box_2d_tight, semantic_segmentation]
+    colorize: [semantic_segmentation]
+
+postprocess:
+  # class_filter is left unset on purpose: a component-type string there is
+  # the documented silent-zero-files failure.
+  crop:
+    method: bbox_tight
+    types: [rgb, semantic_segmentation, component_instance]
+    offset: 10
+    xform_depth: 7
+    output_subdir: cropped

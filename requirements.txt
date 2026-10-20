@@ -1,8 +1,37 @@
 # Runtime deps installed in the Docker container beyond the Isaac Sim base.
-# Versions sourced from the container image (paidf-simulation:sqa).
-# All versions pinned; regenerate with: licensecheck --requirements-paths requirements.txt
+# Versions sourced from the container image (cdf-simulation:sqa).
+# All direct versions are pinned. Regenerate the resolved inventory, SBOM, and
+# notices using the Python 3.12/Linux procedure in third_party/README.md.
 numpy==2.4.6
-Pillow==12.2.0
-aiohttp==3.13.5
+Pillow==12.3.0
+pydantic==2.13.4
 PyYAML==6.0.3
 usd-core==26.5
+boto3==1.40.61
+
+# --- solder solver (pcb_aoi/solder_evolver) --------------------------------
+# Equilibrium solder-joint surface generation. Currently an offline authoring
+# step run on a dev machine, but pinned here so it can move into the container.
+# Versions are the ones the solver was developed and validated against.
+#
+# NOTE: these are the Python deps only. The solver also needs a Surface Evolver
+# binary built from source with dynamic-load support, which is NOT pip
+# installable -- see pcb_aoi/solder_evolver/third_party/evolver/build.sh. The
+# container bakes that binary in via the Dockerfile's evolver-builder stage
+# (the final image still ships no compiler); on a dev machine, run build.sh.
+
+# Mesh booleans for the wet-triangle path (blob - board - metal - body).
+# Makes the meniscus/wet-patch edge chain conforming by construction. Apache-2.0.
+manifold3d==3.5.2
+# Mesh I/O, repair and primitives; used throughout ingest/ and geometry/. MIT.
+trimesh==4.12.2
+# Convex hulls and least-squares primitive fitting. BSD-3-Clause.
+scipy==1.18.0
+# Approximate convex decomposition -> Evolver keep-out constraints. MIT.
+coacd==1.0.11
+# Marching cubes, to mesh an implicit keep-out level set for inspection. BSD-3-Clause.
+scikit-image==0.26.0
+# GPU kernels for the dense SDF bake -- wp.Mesh builds the BVH the closest-point
+# query needs, so we do not roll our own. Falls back to its own CPU device when
+# there is no CUDA. Also already pulled in by the Newton/viewer path. Apache-2.0.
+warp-lang==1.15.0

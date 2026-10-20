@@ -1,0 +1,29 @@
+# Download one PCB ZIP input object from S3, extract its single root-level
+# USD scene, render it, and upload the output tree to a separate S3 prefix.
+api_version: 1.0.0
+domain: pcb-aoi
+
+output_dir: s3://pcb-results/runs/job-123/s3-zip-input/output_dir
+
+scene:
+  usd: s3://pcb-inputs/uploads/job-123/board-a.zip
+  root: /Board
+
+appearance:
+  lighting:
+    mode: white_light
+    dome:
+      intensity: 1000.0
+      visible: true
+
+capture:
+  renderer:
+    resolution: [640, 360]
+    total_spp: 4
+  camera:
+    side: bottom
+    rotation: {x: 0.0, y: 0.0, z: -90.0}
+  scan_grid: [1, 1]
+  limits: {triggers: 1, max_images: 1}
+  outputs:
+    annotators: [rgb]

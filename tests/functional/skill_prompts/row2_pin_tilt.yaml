@@ -1,0 +1,43 @@
+# SQA prompt P02 -- catalog row 2, "Using the attached USD, generate images
+# with tilt variation", ARTIX_PINHEADER_J13_coupon.usdc attached. The tilt band
+# is the skill's fixed default (5-15 degrees); the selector is the coupon's
+# only refdes. No component selection and no annotation: pin_variation targets
+# leads directly.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 0
+
+output_dir: ../../../sdg_test_output/skill_prompts/row2-pin-tilt
+
+scene:
+  usd: ../resources/ARTIX_PINHEADER_J13_coupon.usdc
+  root: /Board
+
+appearance:
+  lighting:
+    mode: white_light
+    exposure: 0.0
+    cone_angle: 120.0
+    cone_softness: 1.0
+    dome:
+      intensity: 1000.0
+      visible: true
+
+operations:
+  pin_variation:
+    - components: [J13]
+      tilt: [5.0, 15.0]
+
+capture:
+  renderer:
+    mode: pathtracing
+    resolution: [640, 360]
+    spp: 1
+    total_spp: 4
+    max_bounces: 4
+  camera:
+    side: bottom
+    rotation: {z: -90.0}
+  scan_grid: [1, 1]
+  outputs:
+    annotators: [rgb]

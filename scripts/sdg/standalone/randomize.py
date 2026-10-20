@@ -56,6 +56,7 @@ def randomize_rig(stage, cfg: dict[str, Any]) -> None:
     build_ring_lights(
         stage,
         cfg["ring_light_root"],
+        camera_side=cfg.get("camera_side", "top"),
         dome_radius=dome_r,
         light_radius=l_rad,
         light_intensity=intens,

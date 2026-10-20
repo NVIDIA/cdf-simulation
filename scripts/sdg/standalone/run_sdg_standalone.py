@@ -20,13 +20,7 @@ Usage:
     python3 run_sdg_standalone.py <target_script.py> [target's argv...]
 
 The first positional arg is the script to runpy under SimulationApp; the rest
-are forwarded as the target's own sys.argv. Examples:
-
-    # Drive sdg_pipeline.py (Path A SDG flows 1/2/3/5):
-    python3 run_sdg_standalone.py scripts/sdg/standalone/sdg_pipeline.py         --config configs/flow1_good_image/good_image.yaml         --pcba-config configs/pcba_target.yaml
-
-    # Drive usd2roi_render.py (Path A flow 4 stage 1):
-    python3 run_sdg_standalone.py scripts/usd2roi/usd2roi_render.py         --config configs/cad2roi/day1/replicator/usd2roi_target.yaml
+are forwarded as the target's own sys.argv.
 
 Why this shim exists:
 - Kit's ext loader concurrently imports omni.warp.core -> warp/__init__.py,
@@ -53,7 +47,10 @@ import runpy
 import sys
 
 if len(sys.argv) < 2:
-    print("[Shim] usage: run_sdg_standalone.py <target_script.py> [target argv...]", flush=True)
+    print(
+        "[Shim] usage: run_sdg_standalone.py <target_script.py> [target argv...]",
+        flush=True,
+    )
     sys.exit(2)
 
 print("[Shim] start", flush=True)
@@ -97,7 +94,7 @@ print(
 
 # --- Resolve target + runpy ---
 target = sys.argv[1]
-# Resolve relative paths against CWD (which docker run sets to /workspace/paidf-simulation
+# Resolve relative paths against CWD (which docker run sets to /workspace/cdf-simulation
 # via the Dockerfile WORKDIR), so callers can pass either an absolute path or a
 # repo-relative path like 'scripts/sdg/standalone/sdg_pipeline.py'.
 if not os.path.isabs(target):

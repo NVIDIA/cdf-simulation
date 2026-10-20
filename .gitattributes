@@ -1,0 +1,3 @@
+*.sh text eol=lf
+# Patch files carry their own whitespace; do not flag it in git diff --check.
+pcb_aoi/solder_evolver/third_party/evolver/patches/*.patch -whitespace

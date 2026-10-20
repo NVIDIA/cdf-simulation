@@ -1,0 +1,42 @@
+# Functional-container smoke test for the versioned YAML API. CI executes this
+# file through `config ... --execute` and verifies `trigger_0000/rgb_0000.png`
+# from one defect-free, bottom-side 64x64 RGB capture.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 11
+output_dir: sdg_test_output/functional/config-smoke
+
+scene:
+  usd: resources/ARTIX_PINHEADER_J13_coupon.usdc
+  root: /Board
+
+appearance:
+  lighting:
+    mode: white_light
+    exposure: 0.0
+    cone_angle: 120.0
+    cone_softness: 1.0
+    dome:
+      intensity: 1000.0
+      visible: true
+
+capture:
+  renderer:
+    mode: pathtracing
+    resolution: [64, 64]
+    spp: 1
+    total_spp: 1
+    max_bounces: 2
+  camera:
+    side: bottom
+    rotation:
+      x: 0.0
+      y: 0.0
+      z: -90.0
+  scan_grid: [1, 1]
+  limits:
+    triggers: 1
+    max_images: 1
+  outputs:
+    annotators: [rgb]
+    image_format: png

@@ -1,447 +1,313 @@
-# Physical AI Data Factory - Simulation
+# Cosmos Data Factory — Simulation
 
-Synthetic data generation for physical-AI use cases. Includes Defect Image Generation (DIG) on printed circuit boards.
+**Package:** `cdf-simulation` · **Version:** 1.2.0 · **CDF authoring API:** 1.0.0 (released)
 
-Container: `${SDG_IMAGE}`
+Cosmos Data Factory (CDF) Simulation generates labeled synthetic data
+with NVIDIA Isaac Sim. Its PCB-AOI domain creates golden and defective printed
+circuit board imagery, annotations, crops, stitched scans, and derived dataset
+artifacts from USD assemblies.
 
----
+Describe a job once in versioned YAML or Python. Both authoring surfaces
+compile to the same validated `JobOrderPlan`; execution does not generate the
+archived flow/PCBA YAML pair or invoke the legacy `sdg_pipeline.py`.
 
-## Prerequisites
+![Example PCB defect render under AOI ring lighting](docs/images/batch_render_aoi.png)
 
-### Clone tested repo
+## What it does
 
-```bash
-cd ~
-git clone https://github.com/NVIDIA/paidf-simulation.git
-cd paidf-simulation
-git checkout main
-```
+- Loads local, S3, or ZIP-packaged USD scenes and board metadata.
+- Configures AOI ring, Modus, dome, white, and authored USD lighting.
+- Generates shift, tombstone, sideflip, reverse-polarity, and missing-component
+  defects.
+- Varies through-hole pins and generates procedural or Surface Evolver solder,
+  including solder-quality defects.
+- Captures RGB, segmentation, bounding boxes, and metadata over single views,
+  scan grids, and scanner-defined fields of view.
+- Post-processes captures into component crops, stitched images, joint ROIs,
+  image-to-USD sidecars, and dataset layouts.
 
-### Download USD assets
+## Entry points
 
-Obtain the USD asset bundle from your project channel. Extract anywhere convenient, then point `PCB_USD_PATH` at the main scene USD:
-
-```bash
-unzip <usd-assets>.zip -d <path/to/usd-assets>
-export PCB_USD_PATH=<path/to/usd-assets>/spark_lighting.usd
-```
-
-The flow run commands below mount `$(dirname $PCB_USD_PATH)` read-only into the container; USDs don't need to live inside the repo.
-
-### Pull image
-
-```bash
-IMAGE=${SDG_IMAGE}
-docker login nvcr.io
-docker pull $IMAGE
-```
-
----
-
-## Run the pipelines
-
-### Flow 1: Good Image Pipeline
-
-#### Prepare the configuration
-
-**Config Path**: `configs/flow1_good_image/good_image.yaml`
-
-| Key | Description |
-|---|---|
-| `scan_grid.x_num`, `y_num` | Number of cells along each axis. Default 10 by 10 produces 100 frames per trigger |
-| `resolution` | Render resolution `[W, H]`. Default `[1920, 1080]` |
-| `pathtracing.total_spp` | Accumulated samples per pixel. Higher values produce cleaner images and longer render times. Default: 32 |
-| `lighting.ring_light` | `true`: per-layer RGB ring light (soldering light). `false`: white light only |
-| `writer.{rgb, bounding_box_2d_tight, semantic_segmentation, ...}` | Per-annotator on/off switches |
-| `rename_to_grid_index` | Default `false` keeps `_NNNN.png` naming. Do not change for standard SDG flows |
-
-**Config Path**: `configs/pcba_target.yaml`
-
-| Key | Description |
-|---|---|
-| `component_types` | Component scope names under `pcba_root`. Only listed scopes receive semantic labels. The good-image pipeline does not use this file |
-
-#### Run the pipeline
-
-```bash
-# Flow 1 — Good Image Pipeline
-PCB=~/paidf-simulation
-IMAGE=${SDG_IMAGE}
-OUTPUT=$PCB/sdg_test_output/flow1_good_image
-
-# Pre-flight
-mkdir -p $OUTPUT && chmod 777 $OUTPUT
-ls /usr/share/nvidia/nvoptix.bin
-
-# Run (Stage 1: Kit render)
-docker run --rm --gpus all --network host \
-  -v /usr/share/nvidia/nvoptix.bin:/usr/share/nvidia/nvoptix.bin:ro \
-  -v $(dirname $PCB_USD_PATH):$(dirname $PCB_USD_PATH):ro \
-  -e PCB_USD_PATH=$PCB_USD_PATH -e PAIDF_SIM_ROOT=$PCB \
-  -v $PCB:/workspace/paidf-simulation \
-  $IMAGE \
-  "scripts/sdg/standalone/sdg_pipeline.py \
-    --config configs/flow1_good_image/good_image.yaml \
-    --pcba-config configs/pcba_target.yaml"
-```
-
-#### Verify the output
-
-```bash
-$ ls $OUTPUT/trigger_0000/ | sed 's/.*\.//' | sort | uniq -c
-    301 json    # 100 bbox_labels + 100 bbox_prim_paths + 100 semseg_labels + metadata.json
-    100 npy     # bbox_2d_tight arrays
-    200 png     # 100 rgb + 100 semantic_segmentation
-      1 txt     # metadata.txt
-
-$ ls $OUTPUT/trigger_0000/rgb_*.png | head -3
-rgb_0000.png  rgb_0001.png  rgb_0002.png    # _NNNN naming, no _x*_y*
-
-$ cat $OUTPUT/trigger_0000/semantic_segmentation_labels_0000.json
-{"(0, 0, 0, 0)":   {"class": "BACKGROUND"},
- "(0, 0, 0, 255)": {"class": "UNLABELLED"},
- "(33, 243, 3, 255)": {"class": "capacitor"}}
-# RGBA values may change; assignment is randomized per run.
-```
-
----
-
-### Flow 2: Defect Image Pipeline (Missing, Shift, Sideflip, Tombstone)
-
-#### Prepare the configuration
-
-**Config Path**: `configs/flow2_defect_image/defect_image.yaml`
-
-| Key | Description |
-|---|---|
-| `defects.shift.{enabled, ratio, translate_range, rotate_z_range}` | XY translation and Z-axis rotation defects |
-| `defects.tombstone.{enabled, ratio, angle_min, angle_max}` | Tilt around Y axis (tombstone) |
-| `defects.sideflip.{enabled, ratio, angle_min, angle_max}` | Flip around X axis |
-| `writer.semantic_types` | Must include `defect` for defect labels to appear in semantic segmentation output |
-| `scan_grid.x_num/y_num`, `resolution`, `lighting`, `pathtracing` | Same as Flow 1 |
-
-**Config Path**: `configs/flow2_defect_image/missing_image.yaml`
-
-| Key | Description |
-|---|---|
-| `missing.ratio` | Fraction of component pool to hide per trigger (0–1) |
-| `writer.reference.{rgb, semantic_segmentation, ...}` | Pass 1: all components visible. Segmentation labels mark hidden components with `defect=missing` |
-| `writer.defective.rgb` | Pass 2: selected components hidden; RGB output only |
-
-#### Run the pipeline
-
-```bash
-# Flow 2 — Defect Image Pipeline
-PCB=~/paidf-simulation
-IMAGE=${SDG_IMAGE}
-
-# Pre-flight
-mkdir -p $PCB/sdg_test_output/flow2_defect_image \
-         $PCB/sdg_test_output/flow2_missing_image
-chmod 777 $PCB/sdg_test_output/flow2_defect_image \
-          $PCB/sdg_test_output/flow2_missing_image
-
-# Run (a) pose defects: shift / tombstone / sideflip
-docker run --rm --gpus all --network host \
-  -v /usr/share/nvidia/nvoptix.bin:/usr/share/nvidia/nvoptix.bin:ro \
-  -v $(dirname $PCB_USD_PATH):$(dirname $PCB_USD_PATH):ro \
-  -e PCB_USD_PATH=$PCB_USD_PATH -e PAIDF_SIM_ROOT=$PCB \
-  -v $PCB:/workspace/paidf-simulation \
-  $IMAGE \
-  "scripts/sdg/standalone/sdg_pipeline.py \
-   --config configs/flow2_defect_image/defect_image.yaml \
-   --pcba-config configs/pcba_target.yaml"
-
-# Run (b) missing components
-docker run --rm --gpus all --network host \
-  -v /usr/share/nvidia/nvoptix.bin:/usr/share/nvidia/nvoptix.bin:ro \
-  -v $(dirname $PCB_USD_PATH):$(dirname $PCB_USD_PATH):ro \
-  -e PCB_USD_PATH=$PCB_USD_PATH -e PAIDF_SIM_ROOT=$PCB \
-  -v $PCB:/workspace/paidf-simulation \
-  $IMAGE \
-  "scripts/sdg/standalone/sdg_pipeline.py \
-   --config configs/flow2_defect_image/missing_image.yaml \
-   --pcba-config configs/pcba_target.yaml"
-```
-
-#### Verify the output
-
-**(a) Pose defects:** output under `flow2_defect_image/trigger_0000/`
-
-```bash
-$ ls $OUTPUT/flow2_defect_image/trigger_0000/ | sed 's/.*\.//' | sort | uniq -c
-    301 json
-    100 npy
-    200 png
-      1 txt
-# 100 of each: rgb / semseg / semseg_labels / bbox_npy / bbox_labels / bbox_prim_paths
-
-$ cat $OUTPUT/flow2_defect_image/trigger_0000/semantic_segmentation_labels_0000.json
-# defect classes appear (cells without that defect won't show all three keys):
-{"(0, 0, 0, 0)":   {"class": "BACKGROUND"},
- "(0, 0, 0, 255)": {"class": "UNLABELLED"},
- "(33, 243, 3, 255)":  {"defect": "sideflip"},
- "(240, 4, 111, 255)": {"defect": "shift"},
- "(27, 186, 239, 255)":{"defect": "tombstone"}}
-```
-
-**(b) Missing components:** output under `flow2_missing_image/trigger_0000/`
-
-```bash
-$ ls $OUTPUT/flow2_missing_image/trigger_0000/reference/ | sed 's/.*\.//' | sort | uniq -c
-    300 json    # 100 bbox_labels + 100 bbox_prim_paths + 100 semseg_labels
-    100 npy     # bbox arrays
-    100 png     # 100 colorized semantic_segmentation (rgb off in reference)
-      1 txt
-
-$ ls $OUTPUT/flow2_missing_image/trigger_0000/defective/ | sed 's/.*\.//' | sort | uniq -c
-    100 png     # rgb only
-      1 txt
-
-$ cat $OUTPUT/flow2_missing_image/trigger_0000/reference/semantic_segmentation_labels_0000.json
-# Hidden components labeled with defect=missing
-{"(0, 0, 0, 0)":   {"class": "BACKGROUND"},
- "(0, 0, 0, 255)": {"class": "UNLABELLED"},
- "(33, 243, 3, 255)": {"defect": "missing"}}
-```
-
-Between Pass 1 and Pass 2, the pipeline log includes `[Pipeline] Hiding N components`. For example, with `missing.ratio: 0.5`, about 1138 of ~2276 components in the pool may be hidden.
-
----
-
-### Flow 3: Good and Defect Pairs Dataset
-
-Paired golden / defect data for ChangeNet-style training is handled by
-the simulation skill's **paired sub-mode** of the single-flow track.
-See [`skills/simulation/SKILL.md`](skills/simulation/SKILL.md)
-for routing detail; the implementation runs the `good` flow and the
-`defect` flow with the same `random_seed` and post-processes via
-`scripts/postprocess/build_pair_dataset.py`.
-
----
-
-### Flow 4: USD2ROI Day-1
-
-#### Prepare the configuration
-
-**Config Path**: `configs/cad2roi/day1/replicator/usd2roi_target.yaml`
-
-| Key | Description |
-|---|---|
-| `scene` | CAD-derived USD path relative to repo root |
-| `real_image` | Real PCB photo path relative to repo root |
-| `semantics: [{match, labels}, ...]` | Prim-path glob to label rules (author per board) |
-| `camera.translate` | `[x, y]` ortho camera center in mm (z fixed at 5000) |
-| `resolution` | Match the real photo aspect ratio so post-MI scale factors `sX` and `sY` are close to 1.0 |
-| `registration.sx_range / sy_range / rot_range_deg / shift_range` | MI search ranges. Tighten if you have priors |
-| `registration.min_mi` | Stage 2 exits with code 2 if `mi_after` < this. Default 0.5 |
-| `crop.classes` | Class labels to extract ROIs for, e.g. `[capacitor, solder, pad, ic]` |
-| `crop.bridge / bridge_dis / bridge_classes` | Enable bridge crops, pixel distance threshold, and class pairs to bridge |
-| `output.dir` | Container-absolute path, e.g. `/workspace/paidf-simulation/sdg_test_output/flow4_day1_rois` |
-
-#### Prepare the real-image input
-
-Download the sample image (screenshot from an AOI machine): <https://drive.google.com/file/d/18rzCtpPgn7paNGv8AtN-xu9ZEcEKyk5c/view?usp=share_link>
-
-```bash
-cd ~/paidf-simulation
-mv ~/Downloads/real.png ./scripts/usd2roi/input
-```
-
-#### Run the scripts
-
-**Step 1: Pre-flight**
-
-```bash
-PCB=~/paidf-simulation
-IMAGE=${SDG_IMAGE}
-OUTPUT=$PCB/sdg_test_output/flow4_day1_rois
-YAML=configs/cad2roi/day1/replicator/usd2roi_target.yaml
-
-mkdir -p $OUTPUT && chmod 777 $OUTPUT
-ls /usr/share/nvidia/nvoptix.bin
-```
-
-**Step 2: Stage 1 render**
-
-```bash
-docker run --rm --gpus all --network host \
-  -v /usr/share/nvidia/nvoptix.bin:/usr/share/nvidia/nvoptix.bin:ro \
-  -v $(dirname $PCB_USD_PATH):$(dirname $PCB_USD_PATH):ro \
-  -e PCB_USD_PATH=$PCB_USD_PATH -e PAIDF_SIM_ROOT=$PCB \
-  -v $PCB:/workspace/paidf-simulation \
-  $IMAGE \
-  "scripts/usd2roi/usd2roi_render.py --config $YAML"
-```
-
-**Step 3: Stage 2 register**
-
-```bash
-docker run --rm --gpus all --network host \
-  -v $PCB:/workspace/paidf-simulation \
-  --entrypoint python3 \
-  $IMAGE \
-  scripts/usd2roi/usd2roi_register.py --config $YAML
-```
-
-**Step 4: Stage 3 crop**
-
-```bash
-docker run --rm \
-  -v $PCB:/workspace/paidf-simulation \
-  --entrypoint python3 \
-  $IMAGE \
-  scripts/usd2roi/usd2roi_crop.py --config $YAML
-```
-
-#### Verify the output
-
-```bash
-$ ls $OUTPUT/
-sdg/  aligned/  crop/
-
-$ ls $OUTPUT/sdg/
-rgb_0000.png  semantic_segmentation_0000.png  semantic_segmentation_labels_0000.json
-metadata.txt  semantic_stats.json
-
-$ python3 -m json.tool $OUTPUT/aligned/params.json
-{
-    "scaleX":       n,
-    "scaleY":       n,
-    "rotation_deg": n,
-    "tx":           n,
-    "ty":           n,
-    "mi_before":    n,
-    "mi_after":     n
-}
-# n values change per run.
-# Open $OUTPUT/aligned/blink.gif to visually QA ref ↔ aligned alternation.
-
-$ ls $OUTPUT/aligned/
-ref_crop.png  aligned_crop.png  blink.gif  params.json
-semantic_segmentation_0000.png  semantic_segmentation_labels_0000.json
-sdg_crop_stats.json  metadata.txt
-
-$ echo "ROIs:    $(ls $OUTPUT/crop/component/normal_img/*.png | wc -l)"
-$ echo "Bridges: $(ls $OUTPUT/crop/bridge/normal_img/*.png  | wc -l)"
-ROIs:    24
-Bridges: 2
-```
-
----
-
-### Flow 5: USD2ROI Day-0
-
-#### Prepare the configuration
-
-**Config Path**: `configs/cad2roi/day0/sdg/day0_image.yaml`
-
-#### Run the scripts
-
-**Step 1: Pre-flight**
-
-```bash
-PCB=~/paidf-simulation
-IMAGE=${SDG_IMAGE}
-OUTPUT=$PCB/sdg_test_output/flow5_day0_rois
-
-mkdir -p $OUTPUT && chmod 777 $OUTPUT
-ls /usr/share/nvidia/nvoptix.bin
-```
-
-**Step 2: Stage 1 render**
-
-```bash
-docker run --rm --gpus all --network host \
-  -v /usr/share/nvidia/nvoptix.bin:/usr/share/nvidia/nvoptix.bin:ro \
-  -v $(dirname $PCB_USD_PATH):$(dirname $PCB_USD_PATH):ro \
-  -e PCB_USD_PATH=$PCB_USD_PATH -e PAIDF_SIM_ROOT=$PCB \
-  -v $PCB:/workspace/paidf-simulation \
-  $IMAGE \
-  "scripts/sdg/standalone/sdg_pipeline.py \
-    --config configs/cad2roi/day0/sdg/day0_image.yaml \
-    --pcba-config configs/pcba_target.yaml"
-```
-
-**Step 3: Set permissions between stages**
-
-```bash
-docker run --rm \
-  -v $PCB:/workspace/paidf-simulation \
-  --entrypoint chmod \
-  $IMAGE 777 /workspace/paidf-simulation/sdg_test_output/flow5_day0_rois
-```
-
-**Step 4: Anchor crop (Stage 2)**
-
-```bash
-docker run --rm \
-  -v $PCB:/workspace/paidf-simulation \
-  --entrypoint python3 \
-  $IMAGE \
-  scripts/usd2roi/usd2roi_crop.py --config configs/cad2roi/day0/usd2roi/day0_crop.yaml
-```
-
-#### Verify the output
-
-```bash
-$ ls $OUTPUT/
-trigger_0000/  crop/
-
-# Stage 1 — labelled scan_grid render (rename_to_grid_index: true)
-$ ls $OUTPUT/trigger_0000/ | head -3
-rgb_x0_y0.png  rgb_x0_y1.png  rgb_x0_y2.png   # _x*_y* spatial naming
-
-$ ls $OUTPUT/trigger_0000/ | sed 's/.*\.//' | sort | uniq -c
-    101 json    # 100 semseg_labels + 1 metadata.json
-    200 png     # 100 rgb_x*_y* + 100 semantic_segmentation_x*_y*
-      1 txt     # metadata.txt
-
-# Stage 2 — multi-cell anchor crop
-$ ls $OUTPUT/crop/component/ | head -5
-x0_y0  x0_y1  x0_y2  x0_y3  x0_y4   # 100 cell directories total
-
-$ echo "Total ROIs: $(find $OUTPUT/crop/component -path '*/normal_img/*.png' | wc -l)"
-Total ROIs: 2150
-
-$ ls $OUTPUT/crop/component/x0_y0/
-normal_img/  cad_mask/  semantic_segmentation_labels.json
-
-$ cat $OUTPUT/crop/component/x0_y0/semantic_segmentation_labels.json
-{"(33, 243, 3, 255)":  {"class": "pad"},
- "(240, 4, 111, 255)": {"class": "capacitor"},
- "(27, 186, 239, 255)":{"class": "solder"}}
-# RGBA values may change per run.
-```
-
----
-
-## Wall-clock timings (one L40 GPU)
-
-Approximate run times on a single NVIDIA L40 GPU:
-
-| Flow | scan_grid / capture | Time |
+| Interface | Use it for | Start here |
 |---|---|---|
-| 1: Good | 10×10 = 100 frames | ~12 min |
-| 2a: Defect (pose) | 10×10 = 100 frames | ~19 min |
-| 2b: Missing | 10×10 × 2 pass | ~18 min |
-| 3: Pairs, Mode A (sequential) | 10×10 + post-process | ~24 min |
-| 4: Day-1 ROIs | 1 frame + register + crop | ~6 min |
-| 5: Day-0 ROIs | 10×10 + crop | ~10 min |
+| Versioned YAML | Reproducible jobs, validation, container execution | [`pcb_aoi/config/examples/`](pcb_aoi/config/examples/README.md) |
+| Python API | Programmatic job construction and composition | [`cdf/API_SPEC.md`](cdf/API_SPEC.md) |
+| Agent skills | Natural-language job authoring and simulation workflows | [Agent skills](#agent-skills) |
+
+## Documentation
+
+| Need | Document |
+|---|---|
+| Copy-paste task recipes | [`COOKBOOK.md`](COOKBOOK.md) |
+| YAML fields, defaults, and path behavior | [PCB-AOI JobConfig guide](pcb_aoi/config/README.md) |
+| Python signatures and validation contract | [`cdf/API_SPEC.md`](cdf/API_SPEC.md) |
+| API overview and execution choices | [`cdf/README.md`](cdf/README.md) |
+| Runnable YAML and Python examples | [`pcb_aoi/config/examples/`](pcb_aoi/config/examples/README.md) · [`pcb_aoi/examples/`](pcb_aoi/examples/README.md) |
+| Functional scenarios and expected artifacts | [`tests/functional/README.md`](tests/functional/README.md) |
+| Surface Evolver solver setup and design | [`pcb_aoi/solder_evolver/README.md`](pcb_aoi/solder_evolver/README.md) |
+| Stratified defect coverage (`variant_index`) | [`docs/defect-variants.md`](docs/defect-variants.md) |
+| Stitched image to USD sidecar | [`docs/image-to-usd-sidecar.md`](docs/image-to-usd-sidecar.md) |
+| Fine-tune SMT component-crop appearance with Qwen-Image-Edit | [Sim2Real tutorial](docs/tutorials/sim2real-qwen-image-edit/README.md) |
 
 ---
+
+## Requirements and access
+
+| Component | Requirement |
+|---|---|
+| Authoring and tests | Python 3.12 or newer; [`uv`](https://docs.astral.sh/uv/) is recommended |
+| Rendering | NVIDIA Isaac Sim 6.1.0, through this repository's image or a local installation |
+| Container execution | Linux, Docker, NVIDIA Container Toolkit, and an NVIDIA GPU supported by Isaac Sim |
+| Container access | A full CDF Simulation image reference from your release channel, or permission to build locally |
+| Board inputs | A prepared USD assembly and its referenced assets or sidecars; this release does not bundle board-derived sample USDs |
+
+The Dockerfile is based on `nvcr.io/nvidia/isaac-sim:6.1.0`. Use the
+[Isaac Sim compatibility checker and installation guide](https://docs.isaacsim.omniverse.nvidia.com/6.1.0/installation/index.html)
+to qualify the host GPU, driver, operating system, and available resources.
+
+### Get the repository
+
+```bash
+git clone https://github.com/NVIDIA/cdf-simulation.git
+cd cdf-simulation
+```
+
+### Get the container image
+
+Use a released image from your project channel:
+
+```bash
+export IMAGE=<registry>/cdf-simulation:<tag>
+docker login <registry>
+docker pull "$IMAGE"
+```
+
+Or build the image from this checkout. The build pulls the Isaac Sim base image
+and compiles the vendored Surface Evolver binary:
+
+```bash
+docker build -t cdf-simulation:local .
+export IMAGE=cdf-simulation:local
+```
+
+### Developer setup: simulated solder solver (optional)
+
+Container users need no additional setup: the image includes the solver binary
+and Python dependencies. Developers running the solver from a checkout must
+build the vendored binary and install the pinned dependencies as described in
+the [Surface Evolver setup guide](pcb_aoi/solder_evolver/README.md).
+
+To confirm the solver is usable from a given interpreter:
+
+```bash
+python -c "from pcb_aoi.solder_generation import registered_solver_ids; \
+           print(registered_solver_ids(available_only=True))"
+# expect 'surface_evolver' in the tuple
+```
+
+### Container networking
+
+Docker's default bridge network is sufficient for SDG rendering, registration,
+and cropping in isolation — host networking is not a functional requirement of
+those steps by themselves.
+
+The validated container recipe below uses `--network host` because Isaac Sim
+may need an extension registry or a Nucleus service bound to the host. Keep it
+unless all required extensions are cached and no host service is needed.
+
+`--network host` removes network-namespace isolation (every co-located
+container/process on the host can then reach ports the containerized process
+binds), so enable it only for a trusted image and environment. See the
+[Isaac Sim container documentation](https://docs.isaacsim.omniverse.nvidia.com/latest/installation/install_container.html)
+for deployment-specific networking requirements.
+
+---
+
+## Quick start: render a prepared board
+
+A job is one declaration across six authoring areas (`scene` / `appearance` /
+`operations` / `annotations` / `capture` / `postprocess`) plus execution
+output, written either as versioned YAML or as Python. Both compile to the same
+`JobOrderPlan`, so the two are interchangeable spellings of one job. Runnable
+YAML examples live in
+[`pcb_aoi/config/examples/`](pcb_aoi/config/examples/README.md) and Python
+scripts in [`pcb_aoi/examples/`](pcb_aoi/examples/README.md). Several examples
+retain the declarations used during development, but their board-derived test
+fixtures are intentionally not distributed in this release: their `scene.usd`
+is the placeholder `/path/to/your_board.usdc`. Update `scene.usd` and the
+board-specific selectors before executing them.
+
+Supply prepared USD assets and their board-specific metadata and configuration.
+CAD-to-USD preparation tooling is not included in this release.
+
+After adapting `minimal.yaml` to your board, mount both the configuration and
+its asset directory into the container:
+
+```bash
+export OUTPUT="$PWD/sdg_test_output/quickstart"
+export KIT_CACHE="$HOME/.cache/cdf-kit"
+export JOB_CONFIG=/absolute/path/to/job.yaml
+export BOARD_ASSETS=/absolute/path/to/board-assets
+
+mkdir -p "$OUTPUT" "$KIT_CACHE"
+# The image runs as isaac-sim (UID/GID 1234:1234).
+sudo chown -R 1234:1234 "$OUTPUT" "$KIT_CACHE"
+sudo chmod -R u=rwX,go=rX "$OUTPUT" "$KIT_CACHE"
+test -f /usr/share/nvidia/nvoptix.bin
+
+docker run --rm --gpus all --network host \
+  -e ACCEPT_EULA=Y \
+  -e PRIVACY_CONSENT=Y \
+  -v /usr/share/nvidia/nvoptix.bin:/usr/share/nvidia/nvoptix.bin:ro \
+  -v "$KIT_CACHE:/isaac-sim/kit/cache" \
+  -v "$OUTPUT:/output" \
+  -v "$JOB_CONFIG:/workspace/job.yaml:ro" \
+  -v "$BOARD_ASSETS:/input:ro" \
+  "$IMAGE" \
+  config /workspace/job.yaml \
+  --config-format job \
+  --execute \
+  --output-dir /output
+```
+
+The environment flags accept the Isaac Sim container EULA and privacy-consent
+setting. Review both before running the command in your environment.
+
+**Success:** the command exits with status 0 and this prints at least one RGB
+artifact:
+
+```bash
+find "$OUTPUT" -type f -name 'rgb_*.png' -print
+```
+
+The `config` entrypoint validates the declared API version, compiles the YAML,
+and executes the normalized plan through Isaac Sim. The Kit cache preserves
+compiled RTX shaders between containers; without it, a fresh container can
+spend roughly 110 seconds compiling before its first render. For an annotated
+defect and component crop, substitute
+`pcb_aoi/config/examples/smt_tombstone.yaml`.
+
+## Other ways to run
+
+### Compile YAML without starting Isaac Sim
+
+Compilation validates the job and prints its normalized plan. It does not need
+a GPU:
+
+```bash
+uv sync
+uv run python -m cdf.config pcb_aoi/config/examples/minimal.yaml
+```
+
+Generate a JSON Schema for editor or CI validation with:
+
+```bash
+uv run python -m cdf.config --print-schema --domain pcb-aoi
+```
+
+### YAML with a local Isaac Sim
+
+```bash
+export ISAAC_SIM_PATH=/path/to/isaac-sim
+uv run python -m cdf.config \
+  pcb_aoi/config/examples/minimal.yaml \
+  --execute
+```
+
+### Python
+
+```bash
+uv run python pcb_aoi/examples/environment_sensor_defects.py
+uv run python pcb_aoi/examples/environment_sensor_defects.py --execute
+```
+
+Python uses the same normalized plan and executor as versioned YAML. The
+checked-in scripts compile by default and render with `--execute`. Full
+functional scenarios and their expected artifacts are described in
+[`tests/functional/README.md`](tests/functional/README.md).
+
+### Your own board
+
+Point `scene.usd` at the board's USD (a local path, an `s3://` URI, or a ZIP
+holding one root-level USD) and `scene.root` at its assembly prim. The pipeline
+never names a board: prim paths, asset names, and part numbers belong to the
+job and its board-local assets. Camera and assembly paths must be configured or
+derived from USD composition; ambiguous multi-board scenes require an explicit
+path.
+
+These sample PCBA USD assemblies follow the
+[SimReady PCB specification](https://github.com/NVIDIA/simready-foundation/tree/feature/pcb)
+for the metadata that identifies each board and its individual components.
+
+Sample PCBA USD packages for the **Artix DC-SCM** and **ICT Baseboard** are
+available from the [CDF PCB USD Dataset](https://huggingface.co/datasets/nvidia/cdf-pcb-usd-dataset).
+After downloading and extracting a package, use its root stage as `scene.usd`:
+
+- Artix DC-SCM: `artix-dc-scm/artix-dc-scm.usda`
+- ICT Baseboard: `ict-baseboard/ict-baseboard.usda`
+
+Start from one of these templates:
+
+- [`minimal.yaml`](pcb_aoi/config/examples/minimal.yaml) for a local USD.
+- [`local_zip.yaml`](pcb_aoi/config/examples/local_zip.yaml) for a ZIP scene.
+- [`s3_usd_input.yaml`](pcb_aoi/config/examples/s3_usd_input.yaml) for an S3 USD.
+- [`s3_zip_input.yaml`](pcb_aoi/config/examples/s3_zip_input.yaml) for an S3 ZIP.
+- [`tht_pin_variation.yaml`](pcb_aoi/config/examples/tht_pin_variation.yaml) for
+  a panelized through-hole assembly.
+
+## Agent skills
+
+| Skill | Use for |
+|---|---|
+| [`skills/cdf`](skills/cdf/SKILL.md) | Generate and validate declarative `CDFJob` Python scripts |
+| [`skills/cdf-simulate`](skills/cdf-simulate/SKILL.md) | Author CDF Python jobs for automated DIG Flow Catalog requests |
+
+## Project structure
+
+```text
+cdf-simulation/
+├── cdf/                  Domain-neutral authoring, planning, and execution API
+├── pcb_aoi/                PCB-AOI domain, config models, geometry, and solvers
+│   ├── config/examples/    Versioned YAML jobs
+│   └── examples/           Python-authored jobs
+├── scripts/                Runtime adapters, post-processing, and utilities
+├── apps/                   Isaac Sim application configuration
+├── skills/                 Natural-language workflow skills
+├── tests/unittests/        CPU/unit and API-parity coverage
+├── tests/functional/       Isaac Sim end-to-end sample scenarios
+├── docs/                   Supported workflow documentation
+├── Dockerfile              Isaac Sim 6.1.0 runtime image
+└── pyproject.toml          Package metadata and Python compatibility
+```
+
+## Troubleshooting
+
+- **`IMAGE` is empty or the pull is denied:** use the complete image reference
+  from the release channel and authenticate to that registry.
+- **`nvoptix.bin` is missing:** verify the NVIDIA driver installation on the
+  host before starting a render.
+- **The first render is much slower:** retain `/isaac-sim/kit/cache` across
+  runs.
+- **The output directory is unwritable:** assign the bind-mounted output and
+  Kit cache to the image's `isaac-sim` user (`1234:1234`) as shown in the quick
+  start. Do not make shared-host directories world-writable.
+- **A config version is rejected:** run `python -m cdf.config --version` and
+  consult [`cdf/VERSION.md`](cdf/VERSION.md) and
+  [`cdf/API_CHANGELOG.md`](cdf/API_CHANGELOG.md).
+- **A component operation resolves nothing or the stage has multiple boards:**
+  supply the correct board root and metadata source; see the
+  [JobConfig troubleshooting guide](pcb_aoi/config/README.md#troubleshooting).
 
 ## Contributing
 
-External contributions are welcome. All commits must be signed off under
-the Developer Certificate of Origin (DCO); see
-[CONTRIBUTING.md](CONTRIBUTING.md) for details.
+External contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md)
+for the pull-request process and required DCO sign-off.
 
 ## License
 
 Source code in this repository is licensed under the Apache License,
 Version 2.0; see [LICENSE](LICENSE). Third-party runtime dependencies and
-their licenses are documented in [third_party/](third_party/) (see
-[`third_party/licenses.txt`](third_party/licenses.txt) for the auto-generated
-inventory and [`third_party/README.md`](third_party/README.md) for notes
-on specific entries).
+their licenses are documented in the
+[`third_party` inventory](third_party/README.md). The corresponding full
+license and attribution texts are collected in
+[`third_party/LICENSE-3rd-party.txt`](third_party/LICENSE-3rd-party.txt).

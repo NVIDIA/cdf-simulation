@@ -1,0 +1,52 @@
+# SQA prompt P01 -- DIG Flow Catalog row 1, "Generate a golden board image
+# using the attached USD", with tests/functional/resources/
+# ARTIX_PINHEADER_J13_coupon.usdc attached. This is the JobConfig the
+# cdf-simulate skill hands to Airflow for that attachment;
+# tests/unittests/api_parity/test_skill_prompt_yaml_api_parity.py asserts it
+# compiles to the same plan as a Python API build of the job. The renderer
+# values are the SQA harness arguments (640x360, 4 spp), not catalog defaults.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 0
+
+output_dir: ../../../sdg_test_output/skill_prompts/row1-golden-tht
+
+scene:
+  usd: ../resources/ARTIX_PINHEADER_J13_coupon.usdc
+  root: /Board
+  components:
+    types: [PinHeader_1x3_P2.54mm_Drill1.1mm]
+
+appearance:
+  lighting:
+    mode: white_light
+    exposure: 0.0
+    cone_angle: 120.0
+    cone_softness: 1.0
+    dome:
+      intensity: 1000.0
+      visible: true
+
+operations:
+  # The catalog's golden board carries procedural solder and no defect.
+  solder_joints:
+    solver: procedural
+    component_types: [PinHeader_1x3_P2.54mm_Drill1.1mm]
+
+annotations:
+  components: true
+
+capture:
+  renderer:
+    mode: pathtracing
+    resolution: [640, 360]
+    spp: 1
+    total_spp: 4
+    max_bounces: 4
+  camera:
+    side: bottom
+    rotation: {z: -90.0}
+  scan_grid: [1, 1]
+  outputs:
+    annotators: [rgb, bounding_box_2d_tight, semantic_segmentation]
+    colorize: [semantic_segmentation]

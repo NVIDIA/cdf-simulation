@@ -1,0 +1,11 @@
+--- a/src/nulgraph.c
++++ b/src/nulgraph.c
+@@ -32,3 +32,8 @@
+   graphgen();
+   LEAVE_GRAPH_MUTEX
+ }
++
++/* PATCH: nulgraph.c lacks set_graphics_title(), which evalmore.c references
++   unconditionally. Only glutgraph.c defines it, so a headless (nulgraph) build
++   fails to link upstream. No-op stub. */
++void set_graphics_title(int mode, char *title) { (void)mode; (void)title; }
