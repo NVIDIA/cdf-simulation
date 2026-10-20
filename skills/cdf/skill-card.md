@@ -67,12 +67,12 @@ Underlying evaluation signals used in this run: <br>
 ## Evaluation Results: <br>
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 84.9% | 81.4% |
-| Security | 85.7% → 100.0% (+14.3 points) | 42.9% → 100.0% (+57.1 points) |
-| Correctness | 22.9% → 85.7% (+62.8 points) | 51.4% → 82.9% (+31.5 points) |
-| Discoverability | 88.3% | 72.1% |
-| Effectiveness | 29.2% → 74.2% (+45.0 points) | 42.9% → 66.1% (+23.2 points) |
-| Efficiency | 76.2% | 85.8% |
+| Overall | 85.8% | 80.5% |
+| Security | 71.4% → 100.0% (+28.6 points) | 57.1% → 100.0% (+42.9 points) |
+| Correctness | 37.1% → 88.6% (+51.5 points) | 48.6% → 88.6% (+40.0 points) |
+| Discoverability | 86.4% | 70.0% |
+| Effectiveness | 24.3% → 78.2% (+53.9 points) | 37.2% → 62.6% (+25.4 points) |
+| Efficiency | 75.9% | 81.2% |
 
 ## Skill Version(s): <br>
 1.2.0 (source: pyproject.toml) <br>
