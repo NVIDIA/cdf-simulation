@@ -9,7 +9,7 @@ NVIDIA <br>
 ### License/Terms of Use: <br>
 Apache 2.0 <br>
 ## Use Case: <br>
-Developers and engineers running Airflow-triggered synthetic data generation for PCBA automated optical inspection (AOI) use this skill to map a fixed DIG Flow Catalog prompt or SQA reference flow onto a validated `cdf` job and compiled JobOrder payload non-interactively, using documented defaults instead of clarifying questions. <br>
+Developers and engineers running Airflow-triggered, non-interactive DIG synthetic-data pipelines use this skill to map a fixed catalog prompt or SQA reference flow onto a validated Cosmos Data Factory (CDF) PCB-AOI job and compiled JobOrder payload for golden boards, pin-geometry variations, and structural or solder defects, applying documented defaults instead of asking clarifying questions. <br>
 
 ### Deployment Geography for Use: <br>
 Global <br>
@@ -27,16 +27,17 @@ Mitigation: Review and scan skill before deployment. <br>
 ## Reference(s): <br>
 - [Fixed defaults](references/fixed-defaults.md) <br>
 - [Payload contract](references/payload-contract.md) <br>
-- [Reference flows (config parity)](references/reference-flows.md) <br>
-- [Pitfall: class_filter is not component_types](references/class-filter-taxonomy.md) <br>
+- [Reference flows](references/reference-flows.md) <br>
+- [Class filter taxonomy](references/class-filter-taxonomy.md) <br>
 - [Verification status](references/verification-status.md) <br>
+- [Interactive CDF skill (skills/cdf)](../cdf/SKILL.md) <br>
 
 
 ## Skill Output: <br>
 **Output Type(s):** [Code, Configuration instructions, Analysis] <br>
-**Output Format:** [Python `cdf.CDFJob` build plus JSON-serialized compiled JobOrderPlan and a Markdown resolved-inputs summary] <br>
+**Output Format:** [Python `cdf.CDFJob` build script plus a compiled `JobOrderPlan` serialized as JSON, with a Markdown resolved-inputs summary] <br>
 **Output Parameters:** [1D] <br>
-**Other Properties Related to Output:** [One payload per variant (one render per process); the skill compiles and hands off but never executes renders] <br>
+**Other Properties Related to Output:** [One variant per payload; compiles and hands off only, never renders] <br>
 
 ## Evaluation Agents Used: <br>
 - Claude Code (`aws/anthropic/bedrock-claude-opus-4-8`) <br>
@@ -45,7 +46,7 @@ Mitigation: Review and scan skill before deployment. <br>
 
 
 ## Evaluation Tasks: <br>
-8 evaluation tasks (8 positive), 1 attempt per task, each run in an isolated k8s-sandbox pod; evaluator version 1.5.6, evaluated 2026-10-14. Overall verdict: PASS. <br>
+8 evaluation tasks (8 positive), 1 attempt per task, each run in an isolated sandbox pod (`k8s-sandbox`), with a three-tier evaluation (static validation, semantic deduplication, live agent evaluation) comparing skill-assisted runs against a no-skill baseline. <br>
 
 ## Evaluation Metrics Used: <br>
 Reported benchmark dimensions: <br>
@@ -53,28 +54,28 @@ Reported benchmark dimensions: <br>
 - Correctness: Is the answer correct? Scored from the `accuracy` signal. <br>
 - Discoverability: Was the right skill loaded when needed? Scored from the `skill_execution` signal. <br>
 - Effectiveness: Did the skill help complete the task? Equal-weight mean of `goal_accuracy` and `behavior_check`. <br>
-- Efficiency: Did it avoid wasted tool calls and token usage? 50% `skill_efficiency` and 50% `token_efficiency`. <br>
+- Efficiency: Did it avoid wasted tool calls and token usage? 50% `skill_efficiency` (tool-call productivity) and 50% `token_efficiency`. <br>
 
 Underlying evaluation signals used in this run: <br>
 - `security`: Unsafe operations, secret leakage, and unauthorized access. <br>
 - `skill_execution`: Whether the expected skill was selected, decoys were avoided, and the workflow executed. <br>
-- `skill_efficiency`: Tool-call productivity (legacy wire id; routing is scored under Discoverability). <br>
+- `skill_efficiency`: Tool-call productivity. <br>
 - `accuracy`: Final-answer correctness against the reference answer. <br>
 - `goal_accuracy`: Whether the user's goal was achieved. <br>
 - `behavior_check`: Whether the expected workflow behavior was followed. <br>
-- `token_efficiency`: Actual uncached prompt plus completion usage (50% of Efficiency). <br>
+- `token_efficiency`: Actual uncached prompt plus completion usage. <br>
 
 
 
 ## Evaluation Results: <br>
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 88.1% — baseline ran, but no comparable score was available; uplift unavailable | 74.9% — baseline ran, but no comparable score was available; uplift unavailable |
-| Security | 75.0% → 100.0% (+25.0 points) | 100.0% → 100.0% (±0.0 points) |
-| Correctness | 30.0% → 95.0% (+65.0 points) | 15.0% → 62.5% (+47.5 points) |
-| Discoverability | 93.1% — baseline ran, but no comparable score was available; uplift unavailable | 71.9% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 42.2% → 67.5% (+25.3 points) | 25.6% → 45.8% (+20.2 points) |
-| Efficiency | 85.0% — baseline ran, but no comparable score was available; uplift unavailable | 94.5% — baseline ran, but no comparable score was available; uplift unavailable |
+| Overall | 88.5% — baseline ran, but no comparable score was available; uplift unavailable | 73.6% — baseline ran, but no comparable score was available; uplift unavailable |
+| Security | 75.0% → 100.0% (+25.0 points) | 87.5% → 100.0% (+12.5 points) |
+| Correctness | 22.5% → 87.5% (+65.0 points) | 17.5% → 57.5% (+40.0 points) |
+| Discoverability | 91.3% — baseline ran, but no comparable score was available; uplift unavailable | 76.3% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 39.2% → 76.0% (+36.8 points) | 24.8% → 39.6% (+14.8 points) |
+| Efficiency | 87.9% — baseline ran, but no comparable score was available; uplift unavailable | 94.7% — baseline ran, but no comparable score was available; uplift unavailable |
 
 ## Skill Version(s): <br>
 1.0.0 (source: frontmatter) <br>
