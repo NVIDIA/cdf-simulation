@@ -54,9 +54,12 @@ uv run python -m cdf.config `
   --execute
 ```
 
-Run the same versioned YAML through the container's `config` entrypoint:
+Run the same versioned YAML through the public release container's `config`
+entrypoint, without building the image locally:
 
 ```bash
+export IMAGE=nvcr.io/nvidia/cdf-simulation:1.2.0
+docker pull "$IMAGE"
 mkdir -p "$PWD/sdg_test_output/examples"
 docker run --rm --gpus all \
   --volume /usr/share/nvidia/nvoptix.bin:/usr/share/nvidia/nvoptix.bin:ro \

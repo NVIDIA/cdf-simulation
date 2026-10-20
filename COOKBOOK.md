@@ -213,7 +213,7 @@ Things the tools assume without telling you. Each row: the default, and where to
 | Fillet inward placement | `inward_offset_mm=2.6` when `adaptive_scale=False`; `inward_frac=0.15` when `True` — mutually exclusive | Same file |
 | Crop knobs | `offset=10` px, `min_coverage=0.2`, `xform_depth=7`, types `(rgb, semantic_segmentation, instance_id_segmentation)` | [scripts/crop/crop_defaults.py](scripts/crop/crop_defaults.py); any `crop:` key you set wins |
 | Crop algorithm (in-process) | The pipeline `crop:` block is **bbox_tight only**; `crop.types: [rgb]` alone yields nothing — labels/coverage come from a semantic output, so keep a semantic type in `writer` + `crop.types` | Other algorithms: [scripts/crop/README.md](scripts/crop/README.md) |
-| Batch env vars | `ISAAC_SIM_PATH` (host launcher), `PCB_AOI_ROOT` (expanded in flow YAML `output:`), `PCB_USD_PATH` (expanded in `pcba_target.yaml` `scene:`) | Export before running; Docker lines pass them with `-e` (some docs use the older `CDF_SIM_ROOT` name for the repo root) |
+| Batch env vars | `ISAAC_SIM_PATH` (host launcher), `PCB_AOI_ROOT` (expanded in flow YAML `output:`), `PCB_USD_PATH` (expanded in `pcba_target.yaml` `scene:`) | Export before running; Docker lines pass them with `-e` |
 
 ## Troubleshooting
 

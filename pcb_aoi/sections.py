@@ -1424,7 +1424,7 @@ class PcbAoiOperationsSection(OperationsSection):
     ) -> PcbAoiOperationsSection:
         """Add dry-contact through-hole fillets: the solder does not ring the pin.
 
-        (Renamed from ``interrupted`` while the API is 1.0.0-unreleased: in
+        (Renamed from ``interrupted`` before the API 1.0.0 release: in
         the AOI taxonomy "interrupted" means partially visible pad
         structures, a different defect; the hole-in-the-solder one is dry
         contact.)

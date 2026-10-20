@@ -57,7 +57,7 @@ def read_lock(path: Path) -> list[tuple[str, str, str, str, str, bool]]:
 
 
 def download(url: str, destination: Path) -> None:
-    request = Request(url, headers={"User-Agent": "paidf-simulation-source-collector/1"})
+    request = Request(url, headers={"User-Agent": "cdf-simulation-source-collector/1"})
     partial = destination.with_suffix(destination.suffix + ".part")
     for attempt in range(1, 4):
         try:
@@ -110,7 +110,7 @@ def main() -> None:
     (args.output / "MANIFEST.tsv").write_text("\n".join(manifest) + "\n", encoding="utf-8")
     (args.output / "README.txt").write_text(
         "Corresponding source archives for Python distributions added by "
-        "paidf-simulation, including supplemental source components required "
+        "cdf-simulation, including supplemental source components required "
         "to build them. See MANIFEST.tsv for versions, checksums, and provenance.\n",
         encoding="utf-8",
     )

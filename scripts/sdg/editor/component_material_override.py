@@ -32,9 +32,11 @@ Approach:
   • Update attribute defaults in-place on each slider change (Sdf.ChangeBlock).
 
 Entry points:
-  headless verify:
+  headless verify (from the repository root, with a local Isaac Sim install):
+    export PCB_AOI_ROOT="$PWD"
+    export ISAAC_SIM_PATH=/path/to/isaac-sim/isaac-sim.sh
     "$ISAAC_SIM_PATH" --no-window \
-      --exec "${CDF_SIM_ROOT}/scripts/component_material_override.py --verify"
+      --exec "${PCB_AOI_ROOT}/scripts/sdg/editor/component_material_override.py --verify"
     → writes /tmp/matctrl_verify.txt, then shuts down
 
   ui (default):

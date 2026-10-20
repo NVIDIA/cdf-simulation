@@ -34,6 +34,26 @@ The core Surface Evolver code is public domain. Debian records the author's
 permission to copy, modify, and redistribute it freely. The original code is
 provided without warranty.
 
+Component-specific notices below also apply; the core public-domain description
+does not replace the notices in the embedded third-party code.
+
+The incorporated src/utility.c contains the MT19937B Mersenne Twister
+implementation attributed to Makoto Matsumoto and Takuji Nishimura, citing
+their January 1998 paper. The upstream file also notes modifications by
+K. Brakke and contains this notice at lines 4265-4268:
+
+    LICENCE CONDITIONS:
+
+        Matsumoto and Nishimura consent to GNU General
+        Public Licence for this code.
+
+The notice does not specify a GPL version, and the pinned archive does not
+include accompanying GPL license text. We preserve the notice verbatim in
+the unmodified upstream source. Neither the core public-domain description
+nor the licensing of a later Mersenne Twister implementation is asserted here
+to supersede this notice. The applicable licensing treatment requires an
+OSS/legal determination; this attribution record does not establish one.
+
 The incorporated source includes src/f2c.h, the Fortran-to-C header:
 
 Copyright 1990-1997 AT&T, Lucent Technologies, and Bellcore.

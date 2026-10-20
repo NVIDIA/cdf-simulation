@@ -93,9 +93,12 @@ Use `--windowed` with `--execute` to show the Isaac Sim window.
 
 ## Container execution
 
-The container exposes one YAML interface through `config`:
+The public release container exposes one YAML interface through `config`.
+No local image build or Isaac Sim installation is required:
 
 ```bash
+export IMAGE=nvcr.io/nvidia/cdf-simulation:1.2.0
+docker pull "$IMAGE"
 docker run --rm --gpus all \
   --volume /usr/share/nvidia/nvoptix.bin:/usr/share/nvidia/nvoptix.bin:ro \
   --volume "$PWD/job-input:/job:ro" \

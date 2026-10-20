@@ -58,7 +58,7 @@ archived flow/PCBA YAML pair or invoke the legacy `sdg_pipeline.py`.
 | Authoring and tests | Python 3.12 or newer; [`uv`](https://docs.astral.sh/uv/) is recommended |
 | Rendering | NVIDIA Isaac Sim 6.1.0, through this repository's image or a local installation |
 | Container execution | Linux, Docker, NVIDIA Container Toolkit, and an NVIDIA GPU supported by Isaac Sim |
-| Container access | A full CDF Simulation image reference from your release channel, or permission to build locally |
+| Container image | Public release: `nvcr.io/nvidia/cdf-simulation:1.2.0`; no local build required |
 | Board inputs | A prepared USD assembly and its referenced assets or sidecars; this release does not bundle board-derived sample USDs |
 
 The Dockerfile is based on `nvcr.io/nvidia/isaac-sim:6.1.0`. Use the
@@ -74,16 +74,15 @@ cd cdf-simulation
 
 ### Get the container image
 
-Use a released image from your project channel:
+Pull the public release image; rebuilding is not required for normal use:
 
 ```bash
-export IMAGE=<registry>/cdf-simulation:<tag>
-docker login <registry>
+export IMAGE=nvcr.io/nvidia/cdf-simulation:1.2.0
 docker pull "$IMAGE"
 ```
 
-Or build the image from this checkout. The build pulls the Isaac Sim base image
-and compiles the vendored Surface Evolver binary:
+For development, optionally build the image from this checkout. The build pulls
+the Isaac Sim base image and compiles the vendored Surface Evolver binary:
 
 ```bash
 docker build -t cdf-simulation:local .
@@ -282,8 +281,10 @@ cdf-simulation/
 
 ## Troubleshooting
 
-- **`IMAGE` is empty or the pull is denied:** use the complete image reference
-  from the release channel and authenticate to that registry.
+- **`IMAGE` is empty or the pull is denied:** set
+  `IMAGE=nvcr.io/nvidia/cdf-simulation:1.2.0` and retry `docker pull "$IMAGE"`.
+  If access is still denied, check registry connectivity and any cached Docker
+  credentials for `nvcr.io`.
 - **`nvoptix.bin` is missing:** verify the NVIDIA driver installation on the
   host before starting a render.
 - **The first render is much slower:** retain `/isaac-sim/kit/cache` across

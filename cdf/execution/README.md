@@ -122,10 +122,11 @@ $env:ISAAC_SIM_PATH = $isaacSimDir
 python pcb_aoi\examples\panel_golden_bottom.py panel.usda --root-path /World/Panel --execute
 ```
 
-For the current local installation, `$isaacSimDir` may be set to:
+For an installation path containing spaces, quote the directory:
 
 ```powershell
-$isaacSimDir = "C:\Users\msoriano\OneDrive - NVIDIA Corporation\Documents\IsaacSim"
+$isaacSimDir = "C:\Applications\NVIDIA Isaac Sim"
+$env:ISAAC_SIM_PATH = $isaacSimDir
 ```
 
 Quoting the environment-variable value supports Isaac Sim installation paths

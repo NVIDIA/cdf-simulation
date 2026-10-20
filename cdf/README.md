@@ -110,6 +110,8 @@ has no compile-only mode. See the
 [format-detection rules](../pcb_aoi/config/README.md#versioned-jobconfig-versus-legacy-yaml).
 
 ```bash
+export IMAGE=nvcr.io/nvidia/cdf-simulation:1.2.0
+docker pull "$IMAGE"
 docker run --rm --gpus all \
   -v "$PWD/job-input:/job" \
   "$IMAGE" \
@@ -174,7 +176,8 @@ To run a Python script that builds and executes a `CDFJob` in the container,
 use the `job-script` entrypoint mode. For example, from the repository root:
 
 ```bash
-export IMAGE="nvcr.io/nv-metropolis-dev/metropolis-sdg/pcb-aoi-ov-sdg:<TAG>"
+export IMAGE=nvcr.io/nvidia/cdf-simulation:1.2.0
+docker pull "$IMAGE"
 mkdir -p "$PWD/sdg_test_output/cdf-example"
 
 docker run --rm --gpus all --network host \

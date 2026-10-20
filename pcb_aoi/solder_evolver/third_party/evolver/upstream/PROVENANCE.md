@@ -64,21 +64,23 @@ The incorporated source includes `src/f2c.h`, the Fortran-to-C header:
 
 ## Licensing
 
-The tarball ships **no license file**, and the upstream website states only
-that the program is "available free of charge". The authoritative third-party
-determination is Debian's, which has distributed this same source for two
-decades. Debian's `debian/copyright` for the `evolver` package records the
-copyright holder's declaration:
+The tarball ships **no standalone license file**, but individual source files
+contain component-specific notices. Debian's `debian/copyright` for the
+`evolver` package records the copyright holder's declaration for the core:
 
 > "These files are public domain and come with NO WARRANTY of any kind."
 
-with the main source marked **public domain** and one exception:
+Debian marks the main source **public domain** and separately identifies:
 
 - `src/f2c.h` — ATT license (AT&T / Lucent / Bellcore, 1990-1997): free use,
   copying and modification for any purpose provided copyright notices are
   preserved in supporting documentation.
 
 Reference: `https://metadata.ftp-master.debian.org/changelogs/main/e/evolver/stable_copyright`
+
+That package-level description does not supersede the component-specific
+notices below. In particular, it is not a determination that the embedded
+Mersenne Twister code is public domain.
 
 File-level notices an auditor will find in the tree, stated here so none of
 them is a surprise:
@@ -87,12 +89,17 @@ them is a surprise:
   skeleton notice **including the special exception**: "when this file is
   copied by Bison into a Bison output file, you may use that output file
   without restriction."
-- `src/utility.c` — embeds the 1998 Mersenne Twister with the notice
-  "Matsumoto and Nishimura consent to GNU General Public Licence for this
-  code." Debian's review rolls this file under the main public-domain
-  declaration; the same authors additionally re-released Mersenne Twister
-  under BSD-3-Clause in 2002 (mt19937ar). Flagged for OSS review rather than
-  resolved here.
+- `src/utility.c` — embeds MT19937B, attributed to Makoto Matsumoto and
+  Takuji Nishimura and citing their January 1998 paper. Lines 4265-4268
+  contain the notice "Matsumoto and Nishimura consent to GNU General Public
+  Licence for this code." The notice specifies no GPL version, and the
+  archive contains no accompanying GPL license text. The notice remains
+  unchanged in the upstream file and is reproduced in
+  `third_party/LICENSE-3rd-party.txt`. We do not infer that Debian's core
+  public-domain description or the licensing of a later Mersenne Twister
+  implementation supersedes this notice. Applicable licensing treatment
+  requires an OSS/legal determination; this provenance record does not
+  establish one.
 - `src/sdrv.c` — f2c-translated Yale Sparse Matrix Package (YSMP) routines,
   including modifications marked "copyright (c) 1990 by Tamar Schlick". The
   YSMP routines are MIT-licensed. The copyright remains in the pristine source,
