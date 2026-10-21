@@ -1,0 +1,29 @@
+#usda 1.0
+(
+    defaultPrim = "Solder"
+    doc = """Packaged default solder material.
+
+Reflowed SAC-alloy look: bright, slightly cool metal with a semi-gloss
+surface (real joints are shinier than paste but duller than a mirror).
+UsdPreviewSurface so the one asset renders in RTX, Storm, and any
+usdview-class tool without an MDL search path.
+
+Referenced by SolderGenerationExtension under <output root>/Looks/Solder
+and bound to every generated solder mesh that has no explicit material
+source -- procedural and simulated meshes get the same look."""
+)
+
+def Material "Solder"
+{
+    token outputs:surface.connect = </Solder/PreviewSurface.outputs:surface>
+
+    def Shader "PreviewSurface"
+    {
+        uniform token info:id = "UsdPreviewSurface"
+        color3f inputs:diffuseColor = (0.74, 0.76, 0.78)
+        float inputs:metallic = 1
+        float inputs:roughness = 0.28
+        float inputs:specular = 0.5
+        token outputs:surface
+    }
+}

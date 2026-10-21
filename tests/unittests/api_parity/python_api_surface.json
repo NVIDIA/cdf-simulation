@@ -1,0 +1,308 @@
+{
+  "scene": {
+    "attach_sidecar": [
+      "name",
+      "kind",
+      "path"
+    ],
+    "configure": [
+      "usd_path",
+      "root_path",
+      "camera_path",
+      "camera_xform_path",
+      "ring_light_root",
+      "horizontal_aperture",
+      "meters_per_unit"
+    ],
+    "instances": [
+      "prim_paths"
+    ],
+    "select_components": [
+      "source",
+      "types",
+      "component_filter"
+    ]
+  },
+  "appearance": {
+    "components": [
+      "vantablack"
+    ],
+    "lighting": [
+      "mode",
+      "preserve_scene_light_color",
+      "exposure_range",
+      "cone_angle_range",
+      "cone_softness_range",
+      "layers",
+      "dome_fill",
+      "dome",
+      "modus"
+    ],
+    "material_override": [
+      "name",
+      "material_path",
+      "diffuse_texture",
+      "roughness_texture",
+      "normal_texture",
+      "diffuse_color",
+      "diffuse_tint",
+      "albedo_brightness",
+      "opacity",
+      "roughness",
+      "roughness_texture_influence",
+      "metallic",
+      "specular_level",
+      "normal_strength",
+      "normal_format",
+      "texture_scale",
+      "texture_rotation",
+      "project_uvw",
+      "world_space_projection",
+      "variation"
+    ]
+  },
+  "operations": {
+    "add_bright": [
+      "ratio",
+      "lead_climb",
+      "fullness",
+      "component_types",
+      "component_filter"
+    ],
+    "add_dry_contact": [
+      "ratio",
+      "gap_fraction",
+      "lead_climb",
+      "fullness",
+      "component_types",
+      "component_filter"
+    ],
+    "add_excess": [
+      "ratio",
+      "volume_ratio",
+      "lead_climb",
+      "fullness",
+      "component_types",
+      "component_filter"
+    ],
+    "add_insufficient": [
+      "ratio",
+      "volume_ratio",
+      "lead_climb",
+      "fullness",
+      "component_types",
+      "component_filter"
+    ],
+    "add_interrupted": [
+      "ratio",
+      "pad_exposure",
+      "lead_climb",
+      "fullness",
+      "component_types",
+      "component_filter"
+    ],
+    "add_missing": [
+      "ratio",
+      "count",
+      "component_filter"
+    ],
+    "add_missing_solder": [
+      "ratio",
+      "component_types",
+      "component_filter"
+    ],
+    "add_reverse_polarity": [
+      "ratio",
+      "count",
+      "component_types",
+      "component_filter"
+    ],
+    "add_shift": [
+      "ratio",
+      "count",
+      "translate_range",
+      "rotate_z_range",
+      "variant_index",
+      "component_filter"
+    ],
+    "add_sideflip": [
+      "ratio",
+      "count",
+      "angle_range",
+      "variant_index",
+      "rotate_z_jitter_deg",
+      "slide_range_mm",
+      "component_filter"
+    ],
+    "add_tombstone": [
+      "ratio",
+      "count",
+      "angle_range",
+      "component_types",
+      "component_filter",
+      "auto_filter",
+      "eligibility_source"
+    ],
+    "hole_plane": [
+      "class_name",
+      "side",
+      "z_offset_mm",
+      "output_prim_path",
+      "components",
+      "component_filter"
+    ],
+    "pin_tip": [
+      "side",
+      "class_name",
+      "offset_mm",
+      "components",
+      "component_filter"
+    ],
+    "pin_variation": [
+      "components",
+      "package_types",
+      "component_filter",
+      "tilt_range",
+      "cut_angle",
+      "height_variation",
+      "offset_range"
+    ],
+    "solder_joints": [
+      "solver",
+      "component_types",
+      "component_filter",
+      "source",
+      "solver_options",
+      "output_root_path",
+      "serialization",
+      "serialization_path"
+    ]
+  },
+  "annotations": {
+    "enable_operation_labels": [
+      "namespace"
+    ],
+    "label_components": [
+      "classes"
+    ],
+    "label_geometry": [
+      "components",
+      "component_filter",
+      "**labels"
+    ]
+  },
+  "capture": {
+    "augmentation": [
+      "motion_blur"
+    ],
+    "camera": [
+      "rotation_range",
+      "side"
+    ],
+    "fov": [
+      "scan_area_mm",
+      "corners_mm",
+      "dpi",
+      "mm_per_px",
+      "image_size_px",
+      "max_tile_px",
+      "centered_on",
+      "guard_px"
+    ],
+    "limits": [
+      "triggers",
+      "max_images"
+    ],
+    "output_start": [
+      "start"
+    ],
+    "outputs": [
+      "rgb",
+      "image_format",
+      "bounding_box_2d_tight",
+      "bounding_box_2d_loose",
+      "bounding_box_3d",
+      "semantic_segmentation",
+      "colorize_semantic_segmentation",
+      "instance_id_segmentation",
+      "colorize_instance_id_segmentation",
+      "semantic_types",
+      "frame_padding",
+      "rename_to_grid_index",
+      "**extra_annotators"
+    ],
+    "renderer": [
+      "mode",
+      "resolution",
+      "spp",
+      "total_spp",
+      "max_bounces",
+      "realtime_subframes"
+    ],
+    "roi_selection": [
+      "refdes",
+      "pins",
+      "component_types",
+      "process_classes",
+      "component_filter",
+      "all_components",
+      "defects",
+      "focus",
+      "count",
+      "padding"
+    ],
+    "scan_grid": [
+      "x_count",
+      "y_count",
+      "scan_area_mm",
+      "centered_on",
+      "scan_center_mm",
+      "image_size_px",
+      "guard_px"
+    ],
+    "visibility": [
+      "hide",
+      "show"
+    ]
+  },
+  "postprocess": {
+    "close_openings": [
+      "source_pass",
+      "class_name",
+      "output_subdir",
+      "output_filename",
+      "max_diameter_px",
+      "min_circularity"
+    ],
+    "crop": [
+      "method",
+      "types",
+      "offset",
+      "min_coverage",
+      "class_filter",
+      "xform_depth",
+      "output_subdir",
+      "mode",
+      "input_subdir",
+      "reference_subdir"
+    ],
+    "format_roi_output": [
+      "rgb_pass",
+      "roi_pass"
+    ],
+    "generate_joint_rois": [
+      "roi_pass",
+      "rgb_pass"
+    ],
+    "stitch": [
+      "source_pass",
+      "image_type",
+      "output_subdir",
+      "output_filename",
+      "blend",
+      "write_labels",
+      "recolor_tiles",
+      "color_map"
+    ]
+  }
+}

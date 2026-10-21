@@ -1,0 +1,190 @@
+# Four-axis PCB THT pin variation on a panelised THT board.
+#
+# A template: scene.usd, root, instances and the refdes list below are
+# placeholders. Replace them with your panel's paths and the refdes of its
+# through-hole population before running.
+#
+# Ordering matters and is already correct: the config compiler emits
+# pin_variation BEFORE solder_joints, so the leads are varied first and the
+# solder is then generated around the leads as varied. The rest -- lighting,
+# component filter, 5x4 bottom scan, two passes, postprocess -- is a plain THT
+# capture, so any difference against the same config without
+# operations.pin_variation is attributable to the pin variation alone.
+
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 814
+
+output_dir: ./output_tht_pin_variation
+
+scene:
+  usd: /path/to/<panel>.usda   # EDIT ME - a literal path
+  #
+  # NOT ${VAR}-substituted. The current-generation config loader does no environment
+  # expansion at all -- only the legacy router touched os.environ. A ${...} left here
+  # compiles fine (paths are not checked at compile time) and then fails at execute,
+  # looking for a file literally named '${PCB_USD_PATH}'. Same for `root`.
+  root: /World/<Panel>_Carrier
+  camera: /World/camera_light/Camera
+  camera_xform: /World/camera_light
+  ring_light: /World/camera_light/aoi_ring_light
+  instances:
+    - /World/<Panel>_Carrier/StepRepeats/SR_0_0
+    - /World/<Panel>_Carrier/StepRepeats/SR_0_1
+
+appearance:
+  lighting:
+    mode: white_light
+    preserve_scene_light_color: false
+    exposure: 0.0
+    cone_angle: 120.0
+    cone_softness: 1.0
+    dome:
+      intensity: 1000.0
+      visible: true
+  vantablack_components: false
+
+operations:
+  hole_plane:
+    side: bottom
+    components: &component_filter
+      # EDIT ME -- the refdes of your board's through-hole components.
+      - J1
+      - J2
+      - K1
+      - C1
+      - R1
+
+  # Vary the leads inside their own plated barrels before any solder is built.
+  # Selected by refdes rather than package_types: package metadata is not
+  # dependable on every board -- an exporter revision can omit values such as
+  # `radial` from pcba:pin:terminalType entirely, so a package sweep would
+  # silently select nothing.
+  #
+  # Every range is a request, not a guarantee: tilt competes with the barrel,
+  # offset with whatever clearance the tilt leaves, and the cut angle with the
+  # protrusion it has to fit inside. The delivered value and the binding
+  # constraint are reported per lead -- read that report, do not assume the
+  # requested band was achieved.
+  # SELECTOR: pin_variation takes exactly one of `components` (refdes) or
+  # `package_types`. Which one works depends on what the board's ingest authored,
+  # so check before you choose -- a selector that matches nothing fails at
+  # operation.pin_variation.apply, AFTER scene.load has already run:
+  #
+  #   from pxr import Usd
+  #   s = Usd.Stage.Open("<board.usd>")
+  #   print(sum(1 for p in s.TraverseAll()
+  #             if p.GetAttribute("pcba:component:packageType")
+  #             and p.GetAttribute("pcba:component:packageType").Get()))
+  #
+  # Where that count is ZERO, refdes is the only option. On a board
+  # where it is non-zero, `package_types: [...]` generalises better.
+  pin_variation:
+    - components: *component_filter
+      tilt: [0.0, 15.0]      # degrees off vertical; 15 is the documented ceiling
+      cut_angle: [0.0, 30.0] # trim-plane angle off perpendicular, degrees
+      height: [0.0, 1.5]     # protrusion past the far board face, mm
+      offset: [0.0, 0.30]    # off-centre distance within the bore, mm
+      #
+      # Derive the band from real AOI captures of your board where possible.
+      # pin_variation samples uniformly from zero, so half the leads land under
+      # half the upper bound, while on a real board being off-centre is often
+      # the normal condition. Matching the real median needs a different
+      # sampling law, not a wider band: a wider band is mostly absorbed by
+      # bore-clearance clamping (see the per-lead report).
+
+  solder_joints:
+    solver: procedural
+    source: usd
+    options:
+      components: *component_filter
+      height_ratio: 0.9
+      resolution: 64
+      solid: true
+      tht_pad_edge_inset_mm: 0.0
+      lead_local_sizing: true
+      solder_material_prim_path: /World/Looks/SolderPaste
+
+  # Copy each lead's final outward tip surface into annotation-only proxy
+  # geometry. The proxy remains hidden for RGB and is revealed only while
+  # solder is hidden in the semantic pass below.
+  pin_tip:
+    side: bottom
+    components: *component_filter
+
+annotations:
+  components: false
+  geometry:
+    solder: solder
+    terminals: pin
+    pads: pad
+    barrels: pad
+    components: *component_filter
+
+capture:
+  passes:
+    # Pass 1 - RGB reference image. Annotation proxies remain hidden by default.
+    full_board:
+      output_start: 0
+      renderer:
+        mode: pathtracing
+        resolution: [2000, 2000]
+        spp: 1
+        total_spp: 32
+        max_bounces: 4
+      camera:
+        side: bottom
+        rotation: {x: 0.0, y: 0.0, z: -90.0}
+      scan_grid: [5, 4]
+      limits: {triggers: 1, max_images: 20}
+      outputs:
+        annotators: [rgb]
+        image_format: png
+        frame_padding: 4
+        # Required by postprocess.format_roi_output for grid-aligned filenames.
+        rename_to_grid_index: true
+
+    # Pass 2 - semantic segmentation, pixel-aligned with full_board.
+    full_board_roi:
+      output_start: 0
+      renderer:
+        mode: pathtracing
+        resolution: [2000, 2000]
+        spp: 1
+        total_spp: 32
+        max_bounces: 4
+      camera:
+        side: bottom
+        rotation: {x: 0.0, y: 0.0, z: -90.0}
+      scan_grid: [5, 4]
+      visibility:
+        hide: [solder, copper]
+        show: [hole, pin_tip]
+      limits: {triggers: 1, max_images: 20}
+      outputs:
+        annotators:
+          - bounding_box_2d_tight
+          - semantic_segmentation
+        image_format: png
+        semantic_types: [class]
+        colorize: [semantic_segmentation]
+        frame_padding: 4
+        # Required by format_roi_output and generate_joint_rois for tile lookup.
+        rename_to_grid_index: true
+
+postprocess:
+  stitch:
+    - source_pass: full_board
+      image_type: rgb
+      output_subdir: stitched
+      output_filename: board_rgb.png
+    - source_pass: full_board_roi
+      image_type: semantic_segmentation
+      output_subdir: stitched
+      output_filename: board_sem.png
+  format_roi_output:
+    rgb_pass: full_board
+    roi_pass: full_board_roi
+  generate_joint_rois:
+    roi_pass: full_board_roi
+    rgb_pass: full_board

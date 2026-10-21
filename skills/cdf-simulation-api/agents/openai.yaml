@@ -1,0 +1,4 @@
+interface:
+  display_name: "CDF Simulation API"
+  short_description: "Generate validated CDF Python job scripts"
+  default_prompt: "Use $cdf-simulation-api to generate a validated declarative CDF Python script for my PCB-AOI job."

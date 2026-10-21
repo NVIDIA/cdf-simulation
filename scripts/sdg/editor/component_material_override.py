@@ -17,10 +17,11 @@
 Component Material Override — all component types
 Controls body color + roughness for every component type listed in the
 pipeline yaml's ``component_types:`` block (or a custom list passed to
-``setup``). Up to 23 types in the production yaml.
+``setup``). The list is per board and is never defaulted here.
 
 Approach:
-  • Find pcba_main_s_detail.usd in stage.GetUsedLayers().
+  • Resolve the board asset layer by composition (the layer authoring the
+    board root), not by filename.
   • Walk every prototype's Shader prims, classify each as body / tin / pad
     by material name (heuristic: "tin_plating" / "solder_pad" / "pad" /
     "Solder_Paste" → tin/pad; everything else → body).
@@ -31,9 +32,11 @@ Approach:
   • Update attribute defaults in-place on each slider change (Sdf.ChangeBlock).
 
 Entry points:
-  headless verify:
+  headless verify (from the repository root, with a local Isaac Sim install):
+    export PCB_AOI_ROOT="$PWD"
+    export ISAAC_SIM_PATH=/path/to/isaac-sim/isaac-sim.sh
     "$ISAAC_SIM_PATH" --no-window \
-      --exec "${PAIDF_SIM_ROOT}/scripts/component_material_override.py --verify"
+      --exec "${PCB_AOI_ROOT}/scripts/sdg/editor/component_material_override.py --verify"
     → writes /tmp/matctrl_verify.txt, then shuts down
 
   ui (default):
@@ -50,6 +53,11 @@ import omni.ui
 import omni.usd
 from pxr import Gf, Sdf, Usd
 
+try:
+    from board_material_override import resolve_board_layer as _resolve_board_layer
+except Exception:  # noqa: BLE001 -- editor may load this module on its own
+    _resolve_board_layer = None
+
 _app = omni.kit.app.get_app()
 
 
@@ -65,36 +73,36 @@ def _resolve_scene():
     return os.path.expandvars(val)
 
 
+def _resolve_component_types():
+    """Component types for the standalone Kit entry points.
+
+    The pipeline passes them from the pcba target config. Run from the Script
+    Editor there is no config, so they come from ``PCB_COMPONENT_TYPES`` (a
+    comma-separated list) — the same shape as ``PCB_USD_PATH``, and for the
+    same reason: the board stays outside the code.
+
+    Raises:
+        RuntimeError: If the variable is unset or empty.
+    """
+    raw = os.environ.get("PCB_COMPONENT_TYPES", "")
+    types = tuple(t.strip() for t in raw.split(",") if t.strip())
+    if not types:
+        raise RuntimeError(
+            "PCB_COMPONENT_TYPES not set; export it as a comma-separated list "
+            "of this board's component-type names (the pcba target's "
+            "component_types)."
+        )
+    return types
+
+
 VERIFY_OUT = "/tmp/matctrl_verify.txt"
 HEADLESS = "--verify" in sys.argv
 
-# Default fallback list of component types — matches the production yaml's
-# ``component_types:`` block. Override by passing ``component_types`` to setup().
-_DEFAULT_COMPONENT_TYPES = (
-    "_0201_H030",
-    "_0201_H040",
-    "_0201_LARGE_H040",
-    "_0402_H040",
-    "_0402_H060",
-    "_0402_LARGE_H070",
-    "_0603_H060",
-    "_0603_H070",
-    "_0603_H100",
-    "_0805U_H070",
-    "_0805U_H150",
-    "_0805U_H160",
-    "_1206U_H080",
-    "_1206U_H180",
-    "_1210U_H280",
-    "_2010_D_H110",
-    "_2512_C_H090",
-    "_2512_C_H220",
-    "IND_SMD_0603_B_H100",
-    "IND_SMD_0603_H100",
-    "IND_SMD_0805_H110",
-    "IND_SMD_2520_D_H120",
-    "IND_SMD_2520_G_H120",
-)
+# Component-type names are the prototype names of ONE board's part library,
+# so there is no default list: setup() requires ``component_types`` from the
+# pcba target config (or the editor field). A baked-in list matches nothing on
+# any other board and would report a successful override over zero shaders.
+_DEFAULT_COMPONENT_TYPES = ()
 
 # Body: switched to OmniPBR.mdl (replaces carpaint painted_yellow.mdl via sublayer override)
 # tin/pad remain their original MDL; roughness attr name = reflection_roughness
@@ -160,7 +168,7 @@ class _State:
         self.tin_paths = []
         self.pad_paths = []
         # Subsets of body/tin/pad paths whose authoritative ``def`` lives
-        # in pcba_main_s_detail itself (not a referenced LibParts asset).
+        # in the board asset layer itself (not a referenced part library).
         # For these, the anon sublayer can author NEW inputs (anon wins
         # because pcba has no opinion), but it CANNOT override pcba's
         # existing ``info:mdl:sourceAsset`` — the parent layer is stronger
@@ -177,11 +185,15 @@ class _State:
 
     # ── setup ─────────────────────────────────────────────────────────────
 
-    def setup(self, stage, component_types=None, vantablack_body=True):
+    def setup(self, stage, component_types=None, vantablack_body=True, board_root=""):
         """
         Discover all body/tin/pad Shader prim paths across the requested
         component types, create one anonymous override sublayer with `over`
-        specs at those paths, insert as sublayer[0] of pcba layer.
+        specs at those paths, insert as sublayer[0] of the board asset layer.
+
+        ``component_types`` is required — it names one board's prototypes.
+        ``board_root`` pins which referenced asset is the board; without it
+        the first prim authored outside the stage's own layers is used.
 
         ``vantablack_body=True`` (default) keeps the AOI vantablack look:
         immediately apply ``_FALLBACK`` body_color=(0,0,0)+metallic=0.89
@@ -195,14 +207,17 @@ class _State:
         with prototype-read defaults where available.
         """
         self.types = tuple(component_types) if component_types else _DEFAULT_COMPONENT_TYPES
+        if not self.types:
+            return False, (
+                "component_material_override needs component_types; set them "
+                "in the pcba target config for this board"
+            )
 
-        self.pcba_layer = None
-        for layer in stage.GetUsedLayers():
-            if "pcba_main_s_detail" in layer.identifier:
-                self.pcba_layer = layer
-                break
+        if _resolve_board_layer is None:
+            return False, "board_material_override.resolve_board_layer unavailable"
+        self.pcba_layer = _resolve_board_layer(stage, board_root)
         if not self.pcba_layer:
-            return False, "pcba_main_s_detail layer not found in GetUsedLayers()"
+            return False, "no board asset layer found in the stage's composition"
 
         # Walk live prototypes once; bucket every Shader prim into body/tin/pad
         # and compute the layer-internal pcba namespace path for each.
@@ -333,20 +348,17 @@ class _State:
                         pcba_native[cls].append(lib_path)
 
         # Second pass: catch shaders authored directly in the LIVE (non-
-        # instanced) tree. ``assets_final/spark_lighting.usd`` authors many
-        # capacitor types (_0201_*, _0402_*, _0603_*, _0805U_*, _1206U_*,
-        # _1210U_*, _2010_*, _2512_*) as plain tn__-prefixed Xforms, NOT
-        # USD-native instances. The prototype walk above only finds shaders
-        # reachable through prim.IsInstance(), so live capacitor shaders
-        # (notably _033_painted_yellow / _007_tin_plating / _001_solder_pad
-        # under tn__-prefixed Xforms) were never discovered and the
-        # material override silently no-op'd on the live body.
+        # instanced) tree. Some scenes author whole component families as
+        # plain tn__-prefixed Xforms, NOT USD-native instances. The prototype
+        # walk above only finds shaders reachable through prim.IsInstance(),
+        # so those live shaders were never discovered and the material
+        # override silently no-op'd on the live body.
         #
-        # spark_lighting.usd mounts pcba_main_s_detail's /World at
-        # /World/pcba_main_s_detail/ via reference. Overrides authored in
-        # pcba_layer must use pcba's INTERNAL namespace (e.g., /World/PCBA/
-        # ...), NOT the live composed path (/World/pcba_main_s_detail/PCBA/
-        # ...). For each live shader whose stack[0] is an external ref
+        # A scene mounts the board asset's own root under an asset xform via
+        # reference. Overrides authored in the board layer must use that
+        # layer's INTERNAL namespace, NOT the live composed path, which
+        # carries the extra asset prefix. For each live shader whose
+        # stack[0] is an external ref
         # layer, walk up to the nearest ancestor that has a spec in
         # pcba_layer and construct the pcba-internal path by appending the
         # suffix from that ancestor down to the shader.
@@ -396,7 +408,7 @@ class _State:
 
     def _read_proto_defaults(self, stage):
         # Body defaults come from _FALLBACK; tin/pad rough read from any
-        # prototype that has authored the attribute (typically `_0603_H100`).
+        # prototype that has authored the attribute.
         d = dict(_FALLBACK)
         for prim in stage.TraverseAll():
             if not prim.IsInstance():
@@ -648,11 +660,11 @@ async def _wait_loaded():
     while ctx.get_stage_loading_status()[2] > 0:
         await _app.next_update_async()
     # Payloads can take additional frames to resolve after the loading counter
-    # hits 0.  Poll until pcba_main_s_detail.usd appears in GetUsedLayers(),
-    # with a generous timeout (120 extra frames ≈ a few seconds headless).
+    # hits 0.  Poll until a referenced board asset layer resolves, with a
+    # generous timeout (120 extra frames ≈ a few seconds headless).
     stage = ctx.get_stage()
     for _ in range(120):
-        if any("pcba_main_s_detail" in l.identifier for l in stage.GetUsedLayers()):
+        if _resolve_board_layer and _resolve_board_layer(stage) is not None:
             break
         await _app.next_update_async()
 
@@ -676,7 +688,8 @@ async def _verify():
     await _wait_loaded()
     stage = ctx.get_stage()
 
-    ok, info = _state.setup(stage)
+    _types = _resolve_component_types()
+    ok, info = _state.setup(stage, component_types=_types)
     lines.append(f"Setup OK : {ok}")
     lines.append(f"Info     : {info}")
     lines.append(f"pcba     : {_state.pcba_layer.identifier if _state.pcba_layer else 'None'}")
@@ -695,19 +708,19 @@ async def _verify():
             await _app.next_update_async()
 
         lines.append("\n=== Prototype shader values after override ===")
+        _probe = _types[0]
         for prim in stage.TraverseAll():
-            if "_0603_H100" not in str(prim.GetPath()) or not prim.IsInstance():
+            if _probe not in str(prim.GetPath()) or not prim.IsInstance():
                 continue
             proto = prim.GetPrototype()
             if not (proto and proto.IsValid()):
                 continue
-            target_parents = {"_033_painted_yellow", "_007_tin_plating", "_001_solder_pad"}
             for p in Usd.PrimRange(proto):
                 if not p.IsValid() or p.GetTypeName() != "Shader":
                     continue
+                # Print every material this prototype carries; which names it
+                # uses is the asset's business, so nothing is filtered by name.
                 parent = p.GetParent().GetName()
-                if parent not in target_parents:
-                    continue
                 for attr in p.GetAttributes():
                     n = attr.GetName()
                     if n.startswith("inputs:"):
@@ -737,7 +750,7 @@ async def _verify():
 
 
 class _Window:
-    TITLE = "0603_H100 Material Override"
+    TITLE = "Component Material Override"
 
     def __init__(self):
         self._win = None
@@ -872,7 +885,8 @@ class _Window:
                 omni.ui.Spacer(height=6)
                 self._status = omni.ui.Label("Setting up…", style={"font_size": 12})
 
-        self._win.set_visibility_changed_fn(lambda v: _state.teardown() if not v else None)
+        self._win.set_visibility_changed_fn(
+            lambda v: None if v else self._teardown_all())
 
     def _row(self, label, key, lo, hi, default):
         lbl_ref = [None]
@@ -1001,7 +1015,10 @@ class _Window:
             stage = omni.usd.get_context().get_stage()
             if stage is None:
                 return
-            ok, _ = self._board_state.setup(stage)
+            looks_root = self._bmo.find_board_looks_root(stage)
+            if not looks_root:
+                return
+            ok, _ = self._board_state.setup(stage, looks_root)
             if not ok:
                 return
         d = self._read_board_slider_dict()
@@ -1019,8 +1036,23 @@ class _Window:
             self._status.text = msg
             self._status.style = {"font_size": 12, "color": color}
 
-    def destroy(self):
+    def _teardown_all(self):
+        """Undo every override this panel installed, not just the first.
+
+        The panel inserts a SECOND board-material override state into the stage
+        (``self._board_state``); tearing down only ``_state`` left that one
+        applied after the window closed, so the board kept an override with no
+        UI left to undo it.
+        """
         _state.teardown()
+        if getattr(self, "_board_state", None) is not None:
+            try:
+                self._board_state.teardown()
+            except Exception:  # noqa: BLE001 -- teardown must not raise on close
+                pass
+
+    def destroy(self):
+        self._teardown_all()
         if self._win:
             self._win.destroy()
             self._win = None
@@ -1041,9 +1073,11 @@ async def _run_ui():
     ctx = omni.usd.get_context()
     stage = ctx.get_stage()
 
-    # Check if the current stage already has pcba_main_s_detail loaded
-    # (i.e. the user already has temp_scene.usd open in Composer/Script Editor).
-    _has_pcba = stage and any("pcba_main_s_detail" in l.identifier for l in stage.GetUsedLayers())
+    # Check whether a board asset is already referenced into the current stage
+    # (i.e. the user already has the scene open in Composer/Script Editor).
+    _has_pcba = bool(
+        stage and _resolve_board_layer and _resolve_board_layer(stage) is not None
+    )
     if not _has_pcba:
         _win_instance.set_status("Opening scene…", 0xFFFFCC44)
         result, err = await ctx.open_stage_async(_resolve_scene())
@@ -1053,7 +1087,7 @@ async def _run_ui():
         await _wait_loaded()
         stage = ctx.get_stage()
 
-    ok, info = _state.setup(stage)
+    ok, info = _state.setup(stage, component_types=_resolve_component_types())
     if not ok:
         _win_instance.set_status(f"Setup failed: {info}", 0xFFFF4444)
         return

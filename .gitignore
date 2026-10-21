@@ -70,13 +70,13 @@ assets/
 # config symlinks.
 !.agents/skills/*/assets/
 !.agents/skills/*/assets/**
+# ... and the packaged solder material the extension binds by default.
+!pcb_aoi/solder_generation/assets/
+!pcb_aoi/solder_generation/assets/**
 
-# Per-resolution / per-mode smoke configs paired with the verification
-# drivers. Hardcoded output paths under sdg_test_output/ so they only
-# work on the maintainer's machine.
-configs/sdg/test_*.yaml
-
-_*
+/_*
+__pycache__/
+*.py[cod]
 # Local convenience symlinks for pipeline assets — point at user-specific
 # scene / component USD source dirs outside the repo. Not part of the MR.
 /assets

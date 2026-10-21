@@ -1,0 +1,14 @@
+# Install the matching PyTorch/torchvision CUDA wheels first; see README.md.
+torch==2.10.0
+torchvision==0.25.0
+diffusers @ git+https://github.com/huggingface/diffusers.git@21ba39457d0b9b72dc59ef8aec7981c947c59f6b
+transformers==5.12.1
+peft==0.19.1
+accelerate==1.14.0
+huggingface-hub==1.20.1
+safetensors==0.8.0
+pillow==12.2.0
+numpy==2.2.6
+sentencepiece==0.2.1
+jupyterlab==4.5.6
+ipykernel==7.2.0

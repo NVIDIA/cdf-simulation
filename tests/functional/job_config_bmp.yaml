@@ -1,0 +1,44 @@
+# Functional-container test for `image_format: bmp`. CI executes this file
+# through `config ... --execute` and verifies `trigger_0000/rgb_0000.bmp`.
+# Same capture as job_config_smoke.yaml; only the image format differs. The
+# writer cannot encode bmp itself, so a .bmp on disk proves the post-write
+# conversion ran and left the frame where the dataset manifest expects it.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 11
+output_dir: sdg_test_output/functional/config-bmp
+
+scene:
+  usd: resources/ARTIX_PINHEADER_J13_coupon.usdc
+  root: /Board
+
+appearance:
+  lighting:
+    mode: white_light
+    exposure: 0.0
+    cone_angle: 120.0
+    cone_softness: 1.0
+    dome:
+      intensity: 1000.0
+      visible: true
+
+capture:
+  renderer:
+    mode: pathtracing
+    resolution: [64, 64]
+    spp: 1
+    total_spp: 1
+    max_bounces: 2
+  camera:
+    side: bottom
+    rotation:
+      x: 0.0
+      y: 0.0
+      z: -90.0
+  scan_grid: [1, 1]
+  limits:
+    triggers: 1
+    max_images: 1
+  outputs:
+    annotators: [rgb]
+    image_format: bmp

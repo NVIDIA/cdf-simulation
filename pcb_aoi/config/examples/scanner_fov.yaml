@@ -1,0 +1,54 @@
+# State PCB capture the way the AOI scanner is configured: a rectangle of board
+# in millimetres at the machine's resolution. `fov` derives the frame size and
+# the scan grid, so `renderer.resolution` and `scan_grid` are not given.
+#
+# Common AOI line-scanner image resolutions: 600 dpi (0.042333 mm/px, the
+# everyday setting) or 1200 dpi (0.021167 mm/px).
+# `dpi: 600` and `mm_per_px: 0.042333` are the same request -- give one.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 11
+
+output_dir: ../../../sdg_test_output/examples/scanner-fov/output_dir
+
+scene:
+  usd: /path/to/your_board.usdc  # EDIT ME -- this release ships no board; see README.md
+  root: /Board
+
+appearance:
+  lighting:
+    mode: white_light
+    exposure: 0.0
+    cone_angle: 120.0
+    cone_softness: 1.0
+    dome:
+      intensity: 1000.0
+      visible: true
+
+capture:
+  renderer:
+    mode: pathtracing
+    spp: 1
+    total_spp: 4
+    max_bounces: 2
+  camera:
+    side: top
+    rotation: {x: 0.0, y: 0.0, z: -90.0}
+  fov:
+    # The coupon is about 16 x 9 mm; at 600 dpi that is a 378 x 213 px frame,
+    # turned to 213 x 378 by the -90 deg camera yaw.
+    scan_area_mm: [16.0, 9.0]
+    dpi: 600
+    max_tile_px: [4096, 4096]
+    centered_on: instance
+  limits: {triggers: 1, max_images: 1}
+  outputs:
+    annotators: [rgb]
+    image_format: png
+
+postprocess:
+  stitch:
+    - source_pass: default
+      image_type: rgb
+      output_subdir: stitched
+      output_filename: board_rgb.png
