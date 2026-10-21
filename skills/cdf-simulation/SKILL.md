@@ -1,6 +1,6 @@
 ---
 name: cdf-simulation
-description: Component-owned guidance for CDF Simulation requests submitted directly or through Airflow-triggered DIG Flow Catalog prompts — golden THT board, THT pin-geometry variation, good/clean SMT images, structural pose defects, and solder texture defects, from a board USD. Turns one matched prompt into one validated `cdf.CDFJob` build and its compiled JobOrder payload; it never executes a render itself. Requires a caller-supplied board USD and output root, asks for either when missing from an interactive request, and resolves optional details with fixed, documented defaults. For explicit Python script authoring or API integration, use cdf-simulation-api.
+description: Component-owned guidance for CDF Simulation requests submitted directly or through Airflow-triggered DIG Flow Catalog prompts — golden THT board, THT pin-geometry variation, good/clean SMT images, structural pose defects, and solder texture defects, from a board USD. Turns one matched prompt into one validated `cdf.CDFJob` build and its compiled JobOrder payload; it never executes a render itself. Requires a caller-supplied board USD and output root, asks for either when missing from an interactive request, and resolves optional details with fixed, documented defaults.
 license: Apache-2.0
 owner: NVIDIA
 service: cdf-simulation
@@ -32,10 +32,6 @@ fake capability or silently doing nothing.
 **This skill does not execute.** It produces a validated `CDFJob` build and
 its compiled JobOrder payload, then stops. An Airflow DAG or another executor
 chosen by the caller performs rendering.
-
-For explicit requests to write, modify, explain, or validate Python scripts,
-or integrate `CDFJob` with caller-owned code, use the
-[`cdf-simulation-api` skill](../cdf-simulation-api/SKILL.md).
 
 ## Catalog coverage
 
