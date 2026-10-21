@@ -1,0 +1,43 @@
+# Prompt fixture -- catalog row 3, board level: "Generate 4 good PCB images
+# using the attached USD", ICT_C0805_C22_coupon.usdc attached. Four images is
+# a 2x2 scan grid (the most square factorisation of the count), no crop, no
+# defect.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 0
+
+output_dir: ../../../sdg_test_output/skill_prompts/row3-good-board
+
+scene:
+  usd: ../resources/ICT_C0805_C22_coupon.usdc
+  root: /Board
+  components:
+    types: [C_0805_2012Metric]
+
+appearance:
+  lighting:
+    mode: white_light
+    exposure: 0.0
+    cone_angle: 120.0
+    cone_softness: 1.0
+    dome:
+      intensity: 1000.0
+      visible: true
+
+annotations:
+  components: true
+
+capture:
+  renderer:
+    mode: pathtracing
+    resolution: [640, 360]
+    spp: 1
+    total_spp: 4
+    max_bounces: 4
+  camera:
+    side: top
+    rotation: {z: 0.0}
+  scan_grid: [2, 2]
+  outputs:
+    annotators: [rgb, bounding_box_2d_tight, semantic_segmentation]
+    colorize: [semantic_segmentation]

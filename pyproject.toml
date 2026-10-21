@@ -1,6 +1,13 @@
 [project]
 license = {text = "Apache-2.0"}
-name = "paidf-simulation"
-version = "1.0.0"
-description = "Physical AI Data Factory Simulation: synthetic data generation, registration, and ROI extraction toolchain (use cases include PCB Defect Image Generation)"
+name = "cdf-simulation"
+version = "1.2.0"
+description = "Cosmos Data Factory Simulation: declarative synthetic data generation for PCB defect imagery and annotations"
 requires-python = ">=3.12"
+dependencies = [
+    "pydantic==2.13.4",
+    "PyYAML==6.0.3",
+]
+
+[project.entry-points."cdf.domains"]
+pcb-aoi = "pcb_aoi"

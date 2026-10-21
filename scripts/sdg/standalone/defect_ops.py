@@ -13,12 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Defect operations: shift, tombstone, sideflip via pose_ops.
-
-Tombstone defect uses manual pivot rotation around the component's bottom edge,
-computing bounding box to find the long axis and rotating around the fixed end.
-"""
+"""Defect operations applied through explicit component-aware transforms."""
 
 from __future__ import annotations
 
@@ -27,13 +22,33 @@ from typing import Any
 
 import numpy as np
 import omni.usd
-from omni.replicator.core.scripts.functional.modify import TagCache, TransformToken, pose_ops
-from pxr import UsdGeom
+from pxr import Gf, UsdGeom, UsdSemantics
 
 try:
-    from omni.replicator.core.functional import modify as rep_modify
-except ImportError:  # Kit --exec init-timing: lazy sys.modules alias not yet set
-    from omni.replicator.core.scripts.functional import modify as rep_modify
+    from omni.replicator.core.scripts.functional.modify import (
+        TagCache,
+        TransformToken,
+        pose_ops,
+    )
+except ImportError:
+    TagCache = None
+    TransformToken = None
+    pose_ops = None
+
+from defects_utils.api import (
+    reverse_polarity,
+    shift,
+    sideflip,
+    tombstone,
+)
+from defects_utils.selection import (
+    describe_targeting,
+    selection_count,
+)
+from defects_utils.tombstone import (
+    _tombstone_eligible_components,
+)
+from defects_utils.transform_utils import _local_transform_matrix
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +63,7 @@ def _warm_pose_ops_context() -> None:
     launch can race with warp's lazy CUDA module load and print
     `[CUDA LAUNCH ERROR] Transform ops kernel launch failed: invalid resource handle`
     to stderr. The kernel succeeds on Replicator's internal retry, so output
-    counts still match, but the log noise misleads SQA into flagging a failure.
+    counts still match, but the log noise is easily mistaken for a failure.
 
     wp.init() + wp.synchronize_device() forces warp to materialize its CUDA
     stream + module bindings on the active device first, so pose_ops sees a
@@ -58,216 +73,472 @@ def _warm_pose_ops_context() -> None:
     global _pose_ops_context_warmed
     if _pose_ops_context_warmed:
         return
+    if pose_ops is None:
+        _pose_ops_context_warmed = True
+        return
     try:
         import warp as wp
+
         wp.init()
         wp.synchronize_device()
         _pose_ops_context_warmed = True
         logger.debug("pose_ops CUDA context warmed via warp.synchronize_device()")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - optional runtime optimization
         logger.debug("pose_ops CUDA context warm-up skipped: %s", e)
 
 
 def _clear_tag_cache() -> None:
     """Clear TagCache private caches for Fabric/USD sync."""
+    if TagCache is None:
+        return
     try:
         TagCache._cache.clear()
         TagCache._path_order_cache.clear()
     except AttributeError:
-        logger.warning("TagCache private API changed — cache not cleared")
+        logger.warning("TagCache private API changed - cache not cleared")
 
 
 def _get_prim_and_transform(prim_path: str) -> tuple:
-    """Get prim and its original transform as row-major 4x4 numpy array and flat list."""
+    """Get prim and its original row-major transform."""
     stage = omni.usd.get_context().get_stage()
     prim = stage.GetPrimAtPath(prim_path)
     if not prim.IsValid():
         logger.error("Prim not found: %s", prim_path)
         return None, None, None
-    matrix = prim.GetAttribute("xformOp:transform").Get()
-    M = np.array([[float(v) for v in row] for row in matrix])
+    try:
+        M = _local_transform_matrix(prim)
+    except ValueError as exc:
+        raise ValueError(
+            f"Component prim {prim_path!r} has no usable local transform: {exc}"
+        ) from exc
     flat = M.flatten().tolist()
     return prim, flat, M
 
 
-def _compute_tombstone_transform(
-    prim: object,
-    M_orig: np.ndarray,
-    angle_min: float,
-    angle_max: float,
-) -> tuple[list[float], dict[str, Any]]:
-    """Compute tombstone pivot rotation matrix.
-
-    Finds the long axis via bounding box, picks a random end to lift,
-    and rotates around the opposite (fixed) end as pivot.
-
-    Returns:
-        final_flat: flat 16-element list of the final 4x4 transform
-        params: dict with angle_deg, sign, long_axis for record storage
-    """
-    bbox_cache = UsdGeom.BBoxCache(0, [UsdGeom.Tokens.default_])
-    local_bbox = bbox_cache.ComputeLocalBound(prim)
-    bbox_range = local_bbox.GetRange()
-    vmin = np.array(bbox_range.GetMin())
-    vmax = np.array(bbox_range.GetMax())
-    center = (vmin + vmax) / 2.0
-    half = (vmax - vmin) / 2.0
-
-    long_axis = int(np.argmax(half))
-    axis_name = ["X", "Y", "Z"][long_axis]
-
-    sign = int(np.random.choice([-1, 1]))
-    angle_deg = float(np.random.uniform(angle_min, angle_max)) * sign
-    angle_rad = np.radians(angle_deg)
-
-    # Pivot point: the end that stays on the board (opposite to lifted end)
-    pivot_vec = np.zeros(3)
-    pivot_vec[long_axis] = -sign
-    pivot_point = center + half * pivot_vec
-
-    # Rotation axis: perpendicular to long axis and board normal (Z)
-    # long_axis=X -> rotate around Y; long_axis=Y -> rotate around X; long_axis=Z -> rotate around X
-    c, s = np.cos(angle_rad), np.sin(angle_rad)
-    R = np.eye(4)
-    if long_axis == 0:  # X -> rotate around Y
-        R[0, 0] = c
-        R[0, 2] = -s
-        R[2, 0] = s
-        R[2, 2] = c
-    elif long_axis == 1:  # Y -> rotate around X
-        R[1, 1] = c
-        R[1, 2] = s
-        R[2, 1] = -s
-        R[2, 2] = c
-    else:  # Z -> rotate around X
-        R[1, 1] = c
-        R[1, 2] = s
-        R[2, 1] = -s
-        R[2, 2] = c
-
-    # Pivot rotation: T(-P) @ R @ T(+P) @ M_orig
-    T_neg = np.eye(4)
-    T_neg[3, 0:3] = -pivot_point
-    T_pos = np.eye(4)
-    T_pos[3, 0:3] = pivot_point
-
-    M_final = T_neg @ R @ T_pos @ M_orig
-    final_flat = M_final.flatten().tolist()
-
-    lifted_end = f"{axis_name}+" if sign > 0 else f"{axis_name}-"
-    logger.info("Tombstone: axis=%s, angle=%.1f deg, lifted=%s", axis_name, angle_deg, lifted_end)
-
-    params = {"angle_deg": angle_deg, "sign": sign, "long_axis": long_axis}
-    return final_flat, params
-
-
 def _apply_semantic(prim: object, defect_type: str) -> None:
     """Apply semantic label + clear TagCache for Fabric/USD sync."""
-    if not prim.HasAttribute("semantics:labels:defect"):
-        rep_modify.semantics(prim, value={"defect": defect_type})
+    labels = UsdSemantics.LabelsAPI.Apply(prim, "defect")
+    labels.CreateLabelsAttr().Set([defect_type])
     _clear_tag_cache()
+
+
+def apply_defect_semantic(prim: object, defect_type: str) -> None:
+    """Label a component ``defect=<type>`` without a transform operation.
+
+    The solder-level defects (insufficient/excess/missing_solder/dry_contact)
+    change geometry the solver produces, not the component's pose -- but they
+    are segmentation classes exactly like the pose operations, so they share
+    this labelling path.
+    """
+    _apply_semantic(prim, defect_type)
+
+
+def _apply_flat_transforms(
+    prim_transforms: list[tuple[object, list[float]]],
+) -> None:
+    """Apply row-major local matrices as one ordered transform batch."""
+    if not prim_transforms:
+        return
+    if pose_ops is not None and TransformToken is not None:
+        prims, flat_transforms = zip(*prim_transforms, strict=True)
+        pose_ops(
+            list(prims),
+            [(TransformToken.TRANSFORM, list(flat_transforms))],
+        )
+        return
+    for prim, flat_transform in prim_transforms:
+        matrix = Gf.Matrix4d(*[float(value) for value in flat_transform])
+        UsdGeom.Xformable(prim).MakeMatrixXform().Set(matrix)
+
+
+def build_defect_context(
+    stage: object,
+    sim_manifest: dict[str, Any] | None = None,
+    board_metadata: object | None = None,
+) -> dict[str, Any]:
+    """Build shared metadata for defect eligibility filters.
+
+    The pipeline loads optional legacy simulation data and a source-neutral
+    board metadata catalog once, then passes them here. This function indexes
+    per-instance metadata by prim path so ``prepare_defects()`` and
+    ``pretag_defect_eligible()`` can reuse it without opening files.
+
+    Args:
+        stage: Open USD stage used for unit conversion.
+        sim_manifest: Decoded ``sim_manifest.json``. Pass None when not
+            configured.
+        board_metadata: Source-neutral board metadata catalog.
+
+    Returns:
+        Shared context containing manifest metadata, cached sizing data,
+        optional ``component_defs_by_path`` mapping prim path to component
+        definition, and optional ``contact_index`` mapping prim path to
+        component instance.
+
+    Example:
+
+    .. code-block:: python
+
+        from defect_ops import build_defect_context
+
+        context = build_defect_context(stage)  # doctest: +SKIP
+        print(context["stage_meters_per_unit"])  # doctest: +SKIP
+
+    """
+    try:
+        stage_mpu = float(UsdGeom.GetStageMetersPerUnit(stage))
+    except (RuntimeError, TypeError, ValueError):
+        stage_mpu = 0.001
+
+    context: dict[str, Any] = {
+        "sim_manifest_present": sim_manifest is not None,
+        "manifest_by_path": {},
+        "stage_meters_per_unit": stage_mpu,
+        "world_bbox_mm_by_path": {},
+        "contact_index": {},
+        "component_defs_by_path": {},
+    }
+
+    if board_metadata is not None:
+        component_defs_by_path = context["component_defs_by_path"]
+        contact_index = context["contact_index"]
+        prototype_by_id = {
+            prototype.prototype_id: prototype for prototype in board_metadata.prototypes
+        }
+        for component in board_metadata.components:
+            prototype = prototype_by_id.get(component.prototype_id or "")
+            component_defs_by_path[component.prim_path] = {
+                "solder_contact_meshes": (
+                    prototype.contact_meshes if prototype else ()
+                ),
+            }
+            contact_index[component.prim_path] = {
+                "path": component.prim_path,
+                "refdes": component.refdes,
+                "side": component.side,
+                "process_class": component.process_class,
+                "body_prims": component.body_prim_paths,
+                "solder_contact_prims": component.contact_prim_paths,
+                "solder_paste_prims": tuple(
+                    paste.prim_path
+                    for paste in board_metadata.paste_for_component(component)
+                ),
+            }
+        logger.info(
+            "Defect context: indexed %d component instance(s) from board metadata",
+            len(contact_index),
+        )
+
+    if not sim_manifest:
+        return context
+
+    manifest_by_path = context["manifest_by_path"]
+    for component_name, entry in sim_manifest.items():
+        if not isinstance(entry, dict):
+            continue
+        if not (
+            "contact_method" in entry
+            or "instances" in entry
+            or "instance_paths" in entry
+        ):
+            continue
+
+        family_contact_count = len(entry.get("contact_points") or [])
+        for prim_path in entry.get("instance_paths") or []:
+            if prim_path:
+                manifest_by_path.setdefault(
+                    str(prim_path),
+                    {
+                        "component_name": component_name,
+                        "family_contact_count": family_contact_count,
+                    },
+                )
+
+        for instance in entry.get("instances") or []:
+            prim_path = instance.get("prim_path")
+            if not prim_path:
+                continue
+            meta = manifest_by_path.setdefault(
+                str(prim_path),
+                {
+                    "component_name": component_name,
+                    "family_contact_count": family_contact_count,
+                },
+            )
+            meta["solder_contact_count"] = instance.get("solder_contact_count")
+            meta["solder_paste_count"] = instance.get("solder_paste_count")
+            meta["ground_clearance_mm"] = instance.get("ground_clearance_mm")
+
+    logger.info(
+        "Defect context: indexed %d sim_manifest component instance(s)",
+        len(manifest_by_path),
+    )
+    return context
+
+
+def _component_type_tokens(cfg: dict[str, Any]) -> list[str]:
+    """Return component-type substring filters from a defect config.
+
+    Args:
+        cfg: Per-defect configuration.
+
+    Returns:
+        Non-empty substring tokens.
+
+    """
+    value = cfg.get("component_types")
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return [str(v) for v in value if str(v)]
+
+
+def _matches_component_types(prim_path: str, tokens: list[str]) -> bool:
+    """Return whether a prim path matches any component-type token.
+
+    Args:
+        prim_path: Component prim path to test.
+        tokens: Substring tokens to match against ``prim_path``.
+
+    Returns:
+        True when at least one token is contained in ``prim_path``.
+
+    """
+    return any(
+        prim_path == token if token.startswith("/") else token in prim_path
+        for token in tokens
+    )
+
+
+def _eligible_components(
+    defect_type: str,
+    cfg: dict[str, Any],
+    component_pool: list[str],
+    used_paths: set[str],
+    defect_context: dict[str, Any] | None,
+    log: bool = True,
+) -> list[str]:
+    """Return eligible candidates for a defect.
+
+    Args:
+        defect_type: Defect name from the configuration.
+        cfg: Per-defect configuration.
+        component_pool: Candidate component prim paths.
+        used_paths: Component prim paths already assigned to another defect.
+        defect_context: Shared defect metadata used by constrained filters.
+        log: Whether to emit eligibility logs.
+
+    Returns:
+        Component prim paths eligible for ``defect_type``.
+
+    """
+    if defect_type == "tombstone":
+        return _tombstone_eligible_components(
+            component_pool,
+            used_paths,
+            cfg,
+            defect_context,
+            log=log,
+        )
+
+    available = [p for p in component_pool if p not in used_paths]
+    type_filter = _component_type_tokens(cfg)
+    if type_filter:
+        available = [p for p in available if _matches_component_types(p, type_filter)]
+    return available
+
+
+def _ordered_enabled_defects(
+    component_pool: list[str],
+    defects_cfg: dict[str, Any],
+    defect_context: dict[str, Any] | None,
+) -> list[tuple[str, dict[str, Any]]]:
+    """Return enabled defects ordered from most to least constrained.
+
+    Constrainedness is estimated dynamically from the current eligible
+    candidate count for each defect. Defects with fewer eligible components are
+    returned first, with original config order used as the tie-breaker.
+
+    Args:
+        component_pool: Candidate component prim paths.
+        defects_cfg: Defect configuration map.
+        defect_context: Shared defect metadata used by constrained filters.
+
+    Returns:
+        Enabled defect names and their configurations, sorted by candidate count.
+
+    Example:
+        If ``reverse_polarity`` has one eligible component, ``tombstone`` has
+        50, and ``shift`` has 200, the returned order is equivalent to::
+
+            [
+                ("reverse_polarity", defects_cfg["reverse_polarity"]),
+                ("tombstone", defects_cfg["tombstone"]),
+                ("shift", defects_cfg["shift"]),
+            ]
+
+    """
+    ordered: list[tuple[int, int, str, dict[str, Any]]] = []
+    for idx, (defect_type, cfg) in enumerate(defects_cfg.items()):
+        if not cfg.get("enabled", False):
+            continue
+        eligible_count = len(
+            _eligible_components(
+                defect_type,
+                cfg,
+                component_pool,
+                used_paths=set(),
+                defect_context=defect_context,
+                log=False,
+            )
+        )
+        ordered.append((eligible_count, idx, defect_type, cfg))
+
+    ordered.sort(key=lambda item: (item[0], item[1]))
+    return [(defect_type, cfg) for _, _, defect_type, cfg in ordered]
 
 
 def prepare_defects(
     component_pool: list[str],
     defects_cfg: dict[str, Any],
+    defect_context: dict[str, Any] | None = None,
+    excluded_paths: set[str] | None = None,
+    *,
+    apply_semantics: bool = True,
 ) -> list[dict[str, Any]]:
-    """Select components, generate random params, apply defects, and store params for re-apply.
+    """Select components, apply defects, and store reapply parameters.
+
+    Args:
+        component_pool: Candidate component prim paths.
+        defects_cfg: Defect configuration map.
+        defect_context: Shared defect metadata used by constrained filters.
+        excluded_paths: Component paths already assigned by earlier operations.
+        apply_semantics: Whether to author Replicator defect labels directly.
 
     Returns:
-        defect_records: list of dicts with path, defect type, and stored transform params
+        Records with selected paths, defect names, and stored transform settings.
+
+    Example:
+
+    .. code-block:: python
+
+        from defect_ops import prepare_defects
+
+        records = prepare_defects(component_paths, defects_cfg)  # doctest: +SKIP
+        print(len(records))  # doctest: +SKIP
+
     """
     _warm_pose_ops_context()
     defect_records: list[dict[str, Any]] = []
-    used_paths: set[str] = set()
+    used_paths = set(excluded_paths or ())
 
-    for defect_type, cfg in defects_cfg.items():
-        if not cfg.get("enabled", False):
-            continue
-
-        available = [p for p in component_pool if p not in used_paths]
-        # Optional per-defect filter: only consider prim paths containing one of
-        # the listed component_types tokens. Used by polarity-sensitive defects
-        # that must target a specific subset of the global pool.
-        type_filter = cfg.get("component_types")
-        if type_filter:
-            available = [p for p in available if any(t in p for t in type_filter)]
+    for defect_type, cfg in _ordered_enabled_defects(
+        component_pool,
+        defects_cfg,
+        defect_context,
+    ):
+        available = _eligible_components(
+            defect_type,
+            cfg,
+            component_pool,
+            used_paths,
+            defect_context,
+        )
         if not available:
-            logger.info("%s: no eligible components after filter; skipping", defect_type)
+            logger.info(
+                "%s: no eligible components after filter; skipping",
+                defect_type,
+            )
             continue
-        n = max(1, int(len(component_pool) * cfg["ratio"]))
-        n = min(n, len(available))
+        ratio_base = (
+            len(available) if defect_type == "tombstone" else len(component_pool)
+        )
+        n = selection_count(
+            cfg,
+            len(available),
+            ratio_base_count=ratio_base,
+            operation_name=defect_type,
+        )
         selected = np.random.choice(available, size=n, replace=False).tolist()
         used_paths.update(selected)
+        operation_transforms: list[tuple[object, list[float]]] = []
 
         for prim_path in selected:
             prim, original_flat, M_orig = _get_prim_and_transform(prim_path)
             if prim is None:
                 continue
 
-            _apply_semantic(prim, defect_type)
+            if apply_semantics:
+                _apply_semantic(prim, defect_type)
 
             record: dict[str, Any] = {
                 "path": prim_path,
                 "defect": defect_type,
                 "original_flat": original_flat,
             }
+            contact_index = (defect_context or {}).get("contact_index") or {}
+            component_instance = contact_index.get(prim_path)
 
             if defect_type == "shift":
-                t = cfg["translate_range"]
-                rz = cfg["rotate_z_range"]
-                translate = np.random.uniform([-t, -t, 0], [t, t, 0], size=(1, 3))
-                rotate_z = np.random.uniform(-rz, rz, size=1)
-                record["translate"] = translate
-                record["rotate_z"] = rotate_z
-                transform_list = [
-                    (TransformToken.TRANSFORM, original_flat),
-                    (TransformToken.TRANSLATE, translate),
-                    (TransformToken.ROTATE_Z, rotate_z),
-                    (TransformToken.PIVOT_TIMES_MINUS_HALF_EXTENT, [0, 0, 1]),
-                ]
-                pose_ops([prim], transform_list)
+                result = shift(
+                    prim,
+                    M_orig,
+                    translate_range=cfg["translate_range"],
+                    rotate_z_range=cfg["rotate_z_range"],
+                    component_instance=component_instance,
+                    variant_index=cfg.get("variant_index"),
+                )
 
             elif defect_type == "tombstone":
-                final_flat, ts_params = _compute_tombstone_transform(
-                    prim, M_orig, cfg["angle_min"], cfg["angle_max"]
+                result = tombstone(
+                    prim,
+                    M_orig,
+                    angle_min=cfg["angle_min"],
+                    angle_max=cfg["angle_max"],
+                    component_instance=component_instance,
                 )
-                record["tombstone_final_flat"] = final_flat
-                record["tombstone_params"] = ts_params
-                transform_list = [
-                    (TransformToken.TRANSFORM, final_flat),
-                ]
-                pose_ops([prim], transform_list)
 
             elif defect_type == "sideflip":
-                sign = np.random.choice([-1, 1])
-                angle = np.random.uniform(cfg["angle_min"], cfg["angle_max"], size=1) * sign
-                record["rotate_x"] = angle
-                transform_list = [
-                    (TransformToken.TRANSFORM, original_flat),
-                    (TransformToken.ROTATE_X, angle),
-                    (TransformToken.PIVOT_TIMES_MINUS_HALF_EXTENT, [0, 0, 1]),
-                ]
-                pose_ops([prim], transform_list)
+                result = sideflip(
+                    prim,
+                    M_orig,
+                    angle_min=cfg["angle_min"],
+                    angle_max=cfg["angle_max"],
+                    component_instance=component_instance,
+                    variant_index=cfg.get("variant_index"),
+                    rotate_z_jitter_deg=cfg.get("rotate_z_jitter_deg", 0.0),
+                    slide_range_mm=cfg.get("slide_range_mm", 0.0),
+                )
 
             elif defect_type == "reverse_polarity":
-                # Fixed 180-degree Z rotation around the component centroid.
-                # Targets only polarity-sensitive component types via the
-                # per-defect component_types filter above.
-                angle = np.array([180.0])
-                record["rotate_z"] = angle
-                transform_list = [
-                    (TransformToken.TRANSFORM, original_flat),
-                    (TransformToken.ROTATE_Z, angle),
-                    (TransformToken.PIVOT_TIMES_MINUS_HALF_EXTENT, [0, 0, 1]),
-                ]
-                pose_ops([prim], transform_list)
+                result = reverse_polarity(
+                    prim,
+                    M_orig,
+                    component_instance=component_instance,
+                )
+            else:
+                logger.warning("Unknown defect type %r; skipping", defect_type)
+                continue
 
+            record[f"{defect_type}_final_flat"] = result.flat_transform
+            record[f"{defect_type}_params"] = result.parameters
+            operation_transforms.append((prim, result.flat_transform))
             defect_records.append(record)
 
-        logger.info("%s: %d components (%.1f%%)", defect_type, n, cfg["ratio"] * 100)
+        _apply_flat_transforms(operation_transforms)
+        logger.info(
+            "%s: %d components (%s)",
+            defect_type,
+            n,
+            describe_targeting(cfg),
+        )
 
-    logger.info("Total defects: %d / %d components", len(defect_records), len(component_pool))
+    logger.info(
+        "Total defects: %d / %d components",
+        len(defect_records),
+        len(component_pool),
+    )
     for d in defect_records[:10]:
         logger.info("  %12s -> %s", d["defect"], d["path"].split("/")[-1])
     if len(defect_records) > 10:
@@ -277,44 +548,33 @@ def prepare_defects(
 
 
 def reapply_defects(defect_records: list[dict[str, Any]]) -> None:
-    """Re-apply all defect transforms using stored params (called before each step_async)."""
+    """Re-apply all stored absolute defect transforms.
+
+    Args:
+        defect_records: Applied-defect records returned by ``prepare_defects()``.
+
+    Example:
+
+    .. code-block:: python
+
+        from defect_ops import reapply_defects
+
+        reapply_defects(records)  # doctest: +SKIP
+
+    """
     _warm_pose_ops_context()
     stage = omni.usd.get_context().get_stage()
+    prim_transforms: list[tuple[object, list[float]]] = []
     for record in defect_records:
         prim = stage.GetPrimAtPath(record["path"])
         if not prim.IsValid():
             continue
 
-        original_flat = record["original_flat"]
-        defect_type = record["defect"]
-
-        if defect_type == "shift":
-            transform_list = [
-                (TransformToken.TRANSFORM, original_flat),
-                (TransformToken.TRANSLATE, record["translate"]),
-                (TransformToken.ROTATE_Z, record["rotate_z"]),
-                (TransformToken.PIVOT_TIMES_MINUS_HALF_EXTENT, [0, 0, 1]),
-            ]
-        elif defect_type == "tombstone":
-            transform_list = [
-                (TransformToken.TRANSFORM, record["tombstone_final_flat"]),
-            ]
-        elif defect_type == "sideflip":
-            transform_list = [
-                (TransformToken.TRANSFORM, original_flat),
-                (TransformToken.ROTATE_X, record["rotate_x"]),
-                (TransformToken.PIVOT_TIMES_MINUS_HALF_EXTENT, [0, 0, 1]),
-            ]
-        elif defect_type == "reverse_polarity":
-            transform_list = [
-                (TransformToken.TRANSFORM, original_flat),
-                (TransformToken.ROTATE_Z, record["rotate_z"]),
-                (TransformToken.PIVOT_TIMES_MINUS_HALF_EXTENT, [0, 0, 1]),
-            ]
-        else:
+        final_key = f"{record['defect']}_final_flat"
+        if final_key not in record:
             continue
-
-        pose_ops([prim], transform_list)
+        prim_transforms.append((prim, record[final_key]))
+    _apply_flat_transforms(prim_transforms)
 
 
 def restore_defects(defect_records: list[dict[str, Any]]) -> None:
@@ -325,19 +585,33 @@ def restore_defects(defect_records: list[dict[str, Any]]) -> None:
     Walks the previous trigger's records and writes the cached
     ``original_flat`` back as a single TRANSFORM op (mirrors the shape
     reapply_defects writes).
+
+    Args:
+        defect_records: Applied-defect records returned by ``prepare_defects()``.
+
+    Example:
+
+    .. code-block:: python
+
+        from defect_ops import restore_defects
+
+        restore_defects(records)  # doctest: +SKIP
+
     """
     stage = omni.usd.get_context().get_stage()
+    prim_transforms: list[tuple[object, list[float]]] = []
     for record in defect_records:
         prim = stage.GetPrimAtPath(record["path"])
         if not prim.IsValid():
             continue
-        transform_list = [(TransformToken.TRANSFORM, record["original_flat"])]
-        pose_ops([prim], transform_list)
+        prim_transforms.append((prim, record["original_flat"]))
+    _apply_flat_transforms(prim_transforms)
 
 
 def pretag_defect_eligible(
     component_pool: list[str],
     defects_cfg: dict[str, Any],
+    defect_context: dict[str, Any] | None = None,
 ) -> int:
     """Pre-tag every defect-eligible prim with its defect semantic at init.
 
@@ -350,19 +624,40 @@ def pretag_defect_eligible(
     its defect class. The actual rotation still varies per trigger via
     pose_ops; the bbox annotator (which doesn't cache the map) remains
     the authoritative per-frame "which prims actually got rotated"
-    ground truth — read ``bounding_box_2d_tight_prim_paths_*.json``.
+    ground truth - read ``bounding_box_2d_tight_prim_paths_*.json``.
 
-    Returns the number of prims tagged.
+    Args:
+        component_pool: Candidate component prim paths.
+        defects_cfg: Defect configuration map.
+        defect_context: Shared defect metadata used by constrained filters.
+
+    Returns:
+        Number of prims tagged.
+
+    Example:
+
+    .. code-block:: python
+
+        from defect_ops import pretag_defect_eligible
+
+        count = pretag_defect_eligible(component_paths, defects_cfg)  # doctest: +SKIP
+        print(count)  # doctest: +SKIP
+
     """
     stage = omni.usd.get_context().get_stage()
     tagged = 0
-    for defect_type, cfg in defects_cfg.items():
-        if not cfg.get("enabled", False):
-            continue
-        type_filter = cfg.get("component_types")
-        eligible = component_pool
-        if type_filter:
-            eligible = [p for p in eligible if any(t in p for t in type_filter)]
+    for defect_type, cfg in _ordered_enabled_defects(
+        component_pool,
+        defects_cfg,
+        defect_context,
+    ):
+        eligible = _eligible_components(
+            defect_type,
+            cfg,
+            component_pool,
+            used_paths=set(),
+            defect_context=defect_context,
+        )
         for prim_path in eligible:
             prim = stage.GetPrimAtPath(prim_path)
             if prim is None or not prim.IsValid():

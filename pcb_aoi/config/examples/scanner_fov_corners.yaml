@@ -1,0 +1,57 @@
+# State PCB capture the way a machine test program states its field of view: two
+# opposite corners of the region in world millimetres (lower-left and upper-right,
+# as exported by a panel-preparation tool), at the machine's resolution. The corners
+# give the size AND place the rectangle; `scan_area_mm` would give the size only
+# and center it on the board. `fov` derives the frame size and the scan grid.
+#
+# Here the region is 9 x 11 mm around the J13 pin header, which sits 3 mm to the
+# right of the coupon's center (coupon bbox 73.0-90.0 x 58.2-81.0 mm, J13
+# 83.2-85.7 x 65.8-73.4 mm): the header lands in the middle of the frame, where a
+# centered 9 x 11 mm rectangle would have put it off to one side. A corner may
+# carry a z ([x, y, z]); it is ignored, the capture being orthographic.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 11
+
+output_dir: ../../../sdg_test_output/examples/scanner-fov-corners/output_dir
+
+scene:
+  usd: /path/to/your_board.usdc  # EDIT ME -- this release ships no board; see README.md
+  root: /Board
+
+appearance:
+  lighting:
+    mode: white_light
+    exposure: 0.0
+    cone_angle: 120.0
+    cone_softness: 1.0
+    dome:
+      intensity: 1000.0
+      visible: true
+
+capture:
+  renderer:
+    mode: pathtracing
+    spp: 1
+    total_spp: 4
+    max_bounces: 2
+  camera:
+    side: top
+    rotation: {x: 0.0, y: 0.0, z: -90.0}
+  fov:
+    # 9 x 11 mm at 600 dpi is a 213 x 260 px frame, turned to 260 x 213 by the
+    # -90 deg camera yaw.
+    corners_mm: [[80.0, 64.0, 0.0], [89.0, 75.0, 0.0]]
+    dpi: 600
+    max_tile_px: [4096, 4096]
+  limits: {triggers: 1, max_images: 1}
+  outputs:
+    annotators: [rgb]
+    image_format: png
+
+postprocess:
+  stitch:
+    - source_pass: default
+      image_type: rgb
+      output_subdir: stitched
+      output_filename: board_rgb.png

@@ -1,0 +1,76 @@
+// SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// sessile.fe -- equilibrium sessile solder drop at a prescribed contact angle.
+//
+// Method (Brakke's canonical wetting recipe, NOT a raw negative-tension facet):
+//   * the substrate is the plane constraint 1 (x3 = 0);
+//   * the drop's base facet is OMITTED (open body) and the volume is closed by the
+//     constraint's `content` integral;
+//   * the contact angle is imposed by the constraint `energy` integral, whose value
+//     equals  -cos(theta) * (wetted area)  -- the Young/wall-tension term expressed as
+//     a line integral around the contact line (equivalent to "wall tension = -cos th",
+//     but numerically STABLE: an actual negative-tension floor facet runs away).
+//
+// PARAMETER ANG (contact angle, deg) and the body target volume are meant to be
+// overridden at run time by the Python driver (ANG := ...; set body[1] target ...).
+
+PARAMETER ANG = 40                       // contact angle through the liquid [deg]
+#define CTH (-cos(ANG*pi/180))           // = -cos(theta); references ANG dynamically
+
+constraint 1                             // wettable substrate plane
+formula: x3 = 0
+energy:                                  // wetted-area energy = CTH * (area = integral x dy)
+  e1: 0
+  e2: CTH*x
+  e3: 0
+content:                                 // closes the open base for the volume integral
+  c1: 0
+  c2: 0
+  c3: -x*y
+
+vertices
+1  0.0 0.0 0.0 constraint 1
+2  1.0 0.0 0.0 constraint 1
+3  1.0 1.0 0.0 constraint 1
+4  0.0 1.0 0.0 constraint 1
+5  0.0 0.0 1.0
+6  1.0 0.0 1.0
+7  1.0 1.0 1.0
+8  0.0 1.0 1.0
+
+edges
+1   1 2 constraint 1
+2   2 3 constraint 1
+3   3 4 constraint 1
+4   4 1 constraint 1
+5   5 6
+6   6 7
+7   7 8
+8   8 5
+9   1 5
+10  2 6
+11  3 7
+12  4 8
+
+faces                                    // NOTE: base face (z=0) intentionally omitted
+1   1 10 -5  -9
+2   2 11 -6 -10
+3   3 12 -7 -11
+4   4  9 -8 -12
+5   5  6  7  8
+
+bodies
+1   1 2 3 4 5   volume 1

@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Exact CPython 3.12/Linux runtime resolution for requirements.txt.
+# requirements.txt remains the direct-dependency source of truth; this file
+# freezes its transitive closure so the installed wheels, SBOM, notices, and
+# corresponding source archives stay aligned for a release image.
+annotated-types==0.8.0
+botocore==1.40.76
+imageio==2.38.0
+jmespath==1.1.0
+lazy-loader==0.6
+networkx==3.7
+pydantic-core==2.46.4
+python-dateutil==2.9.0.post0
+s3transfer==0.14.0
+six==1.17.0
+tifffile==2026.9.20
+typing-extensions==4.16.0
+typing-inspection==0.4.4
+urllib3==2.8.0

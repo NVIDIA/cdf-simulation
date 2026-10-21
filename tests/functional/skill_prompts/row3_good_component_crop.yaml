@@ -1,0 +1,53 @@
+# Prompt fixture -- catalog row 3, component level: "Generate good images of
+# C_0805_2012Metric, max 3", ICT_C0805_C22_coupon.usdc attached. The selection
+# narrows to the named family, the capture is capped at 3 images, and a
+# bbox_tight crop follows with class_filter unset -- a component-type string
+# there is the documented silent-zero-files failure.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 0
+
+output_dir: ../../../sdg_test_output/skill_prompts/row3-good-component-crop
+
+scene:
+  usd: ../resources/ICT_C0805_C22_coupon.usdc
+  root: /Board
+  components:
+    types: [C_0805_2012Metric]
+
+appearance:
+  lighting:
+    mode: white_light
+    exposure: 0.0
+    cone_angle: 120.0
+    cone_softness: 1.0
+    dome:
+      intensity: 1000.0
+      visible: true
+
+annotations:
+  components: true
+
+capture:
+  renderer:
+    mode: pathtracing
+    resolution: [640, 360]
+    spp: 1
+    total_spp: 4
+    max_bounces: 4
+  camera:
+    side: top
+    rotation: {z: 0.0}
+  scan_grid: [1, 1]
+  limits: {max_images: 3}
+  outputs:
+    annotators: [rgb, bounding_box_2d_tight, semantic_segmentation]
+    colorize: [semantic_segmentation]
+
+postprocess:
+  crop:
+    method: bbox_tight
+    types: [rgb, semantic_segmentation, component_instance]
+    offset: 10
+    xform_depth: 7
+    output_subdir: cropped

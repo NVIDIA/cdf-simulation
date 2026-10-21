@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "lanes": [
+    "api-parity",
+    "core-linux",
+    "imaging",
+    "solver-linux",
+    "usd",
+    "windows"
+  ],
+  "rules": [
+    {
+      "pattern": "usd-core (?:is )?not installed(?: \\(CI installs numpy only\\))?",
+      "owner": "usd",
+      "status": "active",
+      "rationale": "USD-backed unit tests execute in the pinned usd-core and Windows lanes.",
+      "allowed_lanes": ["core-linux", "imaging", "solver-linux"]
+    },
+    {
+      "pattern": "requires Bash",
+      "owner": "core-linux",
+      "status": "active",
+      "rationale": "Entrypoint tests execute in every full Linux lane and are intentionally unsupported on Windows.",
+      "allowed_lanes": ["windows"]
+    },
+    {
+      "pattern": "(?:surface_evolver is not registered in this environment|solder defects require the simulated solver, which registers only where its geometry deps import \\(not in the starved CI images\\); the @_covers_operations attribute still satisfies the coverage guard when skipped|solder solver '.+' not registered|no Surface Evolver binary|surface_evolver_solver not importable here|solder_evolver defects not importable here|solder_evolver deps unavailable: .+|fork-only mechanism \\(Linux runtime\\)|trimesh not installed)",
+      "owner": "solver-linux",
+      "status": "active",
+      "rationale": "Solver-dependent tests execute after the vendored DLL-capable Surface Evolver build.",
+      "allowed_lanes": ["api-parity", "core-linux", "imaging", "usd", "windows"]
+    },
+    {
+      "pattern": "requires git",
+      "owner": "cdf-api-version",
+      "status": "covered-external",
+      "rationale": "The dedicated cdf-api-version job installs git and runs the version-policy script directly.",
+      "allowed_lanes": ["core-linux", "imaging", "solver-linux", "usd", "windows"]
+    },
+    {
+      "pattern": "approved (?:SMT|THT|polarized) coupon fixture is not shipped in the public release",
+      "owner": "release-fixture-clearance",
+      "status": "deferred",
+      "rationale": "The public DIG 1.2 release intentionally excludes board-derived coupon assets pending redistribution approval.",
+      "allowed_lanes": ["core-linux", "imaging", "solver-linux", "usd", "windows"],
+      "follow_up": "Restore the affected integration coverage only with approved public replacement fixtures."
+    }
+  ]
+}

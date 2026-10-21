@@ -1,0 +1,350 @@
+{
+  "scene": {
+    "ComponentsConfig": [
+      "sidecar",
+      "types",
+      "component_filter"
+    ],
+    "SceneConfig": [
+      "usd",
+      "root",
+      "camera",
+      "camera_xform",
+      "ring_light",
+      "horizontal_aperture",
+      "meters_per_unit",
+      "instances",
+      "components"
+    ]
+  },
+  "appearance": {
+    "AppearanceConfig": [
+      "lighting",
+      "materials",
+      "vantablack_components"
+    ],
+    "LightLayerConfig": [
+      "intensity",
+      "color",
+      "color_r",
+      "color_g",
+      "color_b",
+      "visible"
+    ],
+    "LightingConfig": [
+      "mode",
+      "preserve_scene_light_color",
+      "exposure",
+      "cone_angle",
+      "cone_softness",
+      "dome_fill",
+      "layers",
+      "dome",
+      "modus"
+    ],
+    "MaterialOverrideConfig": [
+      "material_path",
+      "diffuse_texture",
+      "roughness_texture",
+      "normal_texture",
+      "diffuse_color",
+      "diffuse_tint",
+      "albedo_brightness",
+      "opacity",
+      "roughness",
+      "roughness_texture_influence",
+      "metallic",
+      "specular_level",
+      "normal_strength",
+      "normal_format",
+      "texture_scale",
+      "texture_rotation",
+      "project_uvw",
+      "world_space_projection",
+      "variation"
+    ],
+    "ModusLightingConfig": [
+      "arc_radius_scale",
+      "width",
+      "width_frac",
+      "height_scale",
+      "elevations",
+      "intensities",
+      "colors",
+      "layers"
+    ]
+  },
+  "operations": {
+    "BrightConfig": [
+      "ratio",
+      "lead_climb",
+      "fullness",
+      "component_types",
+      "component_filter"
+    ],
+    "DryContactConfig": [
+      "ratio",
+      "gap_fraction",
+      "lead_climb",
+      "fullness",
+      "component_types",
+      "component_filter"
+    ],
+    "ExcessConfig": [
+      "ratio",
+      "volume_ratio",
+      "lead_climb",
+      "fullness",
+      "component_types",
+      "component_filter"
+    ],
+    "HolePlaneConfig": [
+      "class_name",
+      "side",
+      "z_offset_mm",
+      "output_prim_path",
+      "components",
+      "component_filter"
+    ],
+    "InsufficientConfig": [
+      "ratio",
+      "volume_ratio",
+      "lead_climb",
+      "fullness",
+      "component_types",
+      "component_filter"
+    ],
+    "InterruptedConfig": [
+      "ratio",
+      "pad_exposure",
+      "lead_climb",
+      "fullness",
+      "component_types",
+      "component_filter"
+    ],
+    "MissingConfig": [
+      "ratio",
+      "count",
+      "component_filter"
+    ],
+    "MissingSolderConfig": [
+      "ratio",
+      "component_types",
+      "component_filter"
+    ],
+    "OperationsConfig": [
+      "shift",
+      "tombstone",
+      "sideflip",
+      "reverse_polarity",
+      "missing",
+      "pin_variation",
+      "solder_joints",
+      "hole_plane",
+      "pin_tip",
+      "insufficient",
+      "excess",
+      "bright",
+      "interrupted",
+      "missing_solder",
+      "dry_contact"
+    ],
+    "PinTipConfig": [
+      "side",
+      "class_name",
+      "offset_mm",
+      "components",
+      "component_filter"
+    ],
+    "PinVariationGroupConfig": [
+      "components",
+      "package_types",
+      "component_filter",
+      "tilt",
+      "cut_angle",
+      "height",
+      "offset"
+    ],
+    "ReversePolarityConfig": [
+      "ratio",
+      "count",
+      "component_filter",
+      "component_types"
+    ],
+    "ShiftConfig": [
+      "ratio",
+      "count",
+      "component_filter",
+      "translate",
+      "rotate_z",
+      "variant_index"
+    ],
+    "SideflipConfig": [
+      "ratio",
+      "count",
+      "component_filter",
+      "angle",
+      "variant_index",
+      "rotate_z_jitter_deg",
+      "slide_range_mm"
+    ],
+    "SolderJointsConfig": [
+      "solver",
+      "component_types",
+      "component_filter",
+      "source",
+      "options",
+      "output_root_path",
+      "serialization",
+      "serialization_path"
+    ],
+    "TombstoneConfig": [
+      "ratio",
+      "count",
+      "component_filter",
+      "angle",
+      "component_types",
+      "auto_filter",
+      "eligibility_source"
+    ]
+  },
+  "annotations": {
+    "AnnotationsConfig": [
+      "components",
+      "component_classes",
+      "operation_labels",
+      "geometry"
+    ],
+    "AnnotationsGeometryConfig": [
+      "solder",
+      "terminals",
+      "pads",
+      "holes",
+      "barrels",
+      "body",
+      "marking",
+      "components",
+      "component_filter"
+    ]
+  },
+  "capture": {
+    "CameraConfig": [
+      "side",
+      "rotation"
+    ],
+    "CaptureConfig": [
+      "output_start",
+      "renderer",
+      "camera",
+      "scan_grid",
+      "fov",
+      "visibility",
+      "roi_selection",
+      "limits",
+      "motion_blur",
+      "outputs",
+      "passes"
+    ],
+    "LimitsConfig": [
+      "triggers",
+      "max_images"
+    ],
+    "OutputsConfig": [
+      "annotators",
+      "image_format",
+      "semantic_types",
+      "colorize",
+      "frame_padding",
+      "rename_to_grid_index"
+    ],
+    "RenderPassConfig": [
+      "output_start",
+      "renderer",
+      "camera",
+      "scan_grid",
+      "fov",
+      "visibility",
+      "roi_selection",
+      "limits",
+      "motion_blur",
+      "outputs"
+    ],
+    "RendererConfig": [
+      "mode",
+      "resolution",
+      "spp",
+      "total_spp",
+      "max_bounces",
+      "realtime_subframes"
+    ],
+    "RoiSelectorConfig": [
+      "refdes",
+      "pins",
+      "component_types",
+      "process_classes",
+      "component_filter",
+      "all_components",
+      "defects",
+      "focus",
+      "count",
+      "padding"
+    ],
+    "RotationConfig": [
+      "x",
+      "y",
+      "z"
+    ],
+    "ScanGridConfig": [
+      "x_count",
+      "y_count",
+      "scan_area_mm",
+      "centered_on",
+      "scan_center_mm",
+      "image_size_px",
+      "guard_px"
+    ],
+    "VisibilityConfig": [
+      "hide",
+      "show"
+    ]
+  },
+  "postprocess": {
+    "CloseOpeningsConfig": [
+      "source_pass",
+      "class_name",
+      "output_subdir",
+      "output_filename",
+      "max_diameter_px",
+      "min_circularity"
+    ],
+    "CropConfig": [
+      "method",
+      "types",
+      "offset",
+      "min_coverage",
+      "class_filter",
+      "xform_depth",
+      "output_subdir",
+      "mode",
+      "input_subdir",
+      "reference_subdir"
+    ],
+    "PostprocessConfig": [
+      "crop",
+      "close_openings",
+      "stitch",
+      "format_roi_output",
+      "generate_joint_rois"
+    ],
+    "StitchConfig": [
+      "source_pass",
+      "image_type",
+      "output_subdir",
+      "output_filename",
+      "blend",
+      "write_labels",
+      "recolor_tiles",
+      "color_map"
+    ]
+  }
+}

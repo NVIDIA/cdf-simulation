@@ -1,0 +1,67 @@
+# Build context allowlist for this Dockerfile only.
+# Keep in sync with its COPY instructions. New top-level paths are excluded
+# by default; the functional harness stays in the image for release smoke tests.
+**
+
+# Build definition (sent to the builder, not copied into the runtime image)
+!Dockerfile
+!Dockerfile.dockerignore
+
+# Runtime, documentation, and workflow skills
+!cdf/
+!cdf/**
+!pcb_aoi/
+!pcb_aoi/**
+!scripts/
+!scripts/**
+!apps/
+!apps/**
+!third_party/
+!third_party/**
+!docs/
+!docs/**
+!skills/
+!skills/**
+
+# CI executes these scenarios and their resources directly from the image.
+!tests/
+tests/*
+!tests/functional/
+!tests/functional/**
+
+# Package metadata, dependency lock, licenses, and usage documentation
+!pyproject.toml
+!requirements.txt
+!LICENSE
+!README.md
+!COOKBOOK.md
+
+# Local files inside allowed directories are still excluded.
+**/.git
+**/.env
+**/.env.*
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/venv
+**/env
+**/.pytest_cache
+**/.ruff_cache
+**/.ruff-tool
+**/.uv-cache*
+**/.codex-uv-cache
+**/.codex-tmp
+**/.idea
+**/.vscode
+**/.DS_Store
+**/Thumbs.db
+**/*.egg-info
+
+# Host scene inputs and generated outputs are mounted at runtime.
+scripts/usd2roi/input
+scripts/usd2roi/output
+scripts/procedural_board/assets
+
+# Build the Evolver in the builder stage, never copy a host build.
+pcb_aoi/solder_evolver/vendor
+pcb_aoi/solder_evolver/third_party/evolver/.build

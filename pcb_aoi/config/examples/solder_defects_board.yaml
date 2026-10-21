@@ -1,0 +1,126 @@
+# PCB solder-level defects (CDF JobConfig format).
+# See the Solder defects section of pcb_aoi/config/README.md.
+#
+# Each solder defect type is its own operation, exactly like the pose
+# defects: it independently selects `ratio` of the (remaining) eligible
+# pool, non-overlapping across types and with the pose operations. Every
+# defect parameter is a POST-SOLVE OBSERVABLE (measurable on the output
+# geometry), never a solver internal. Scalars accept a value or a [min, max]
+# range -- volume_ratio samples per selected component; gap_fraction and the
+# shape pair (lead_climb, fullness) sample per joint.
+#
+# Fill the __BOARD_DIR__ / __BOARD__ placeholders with the directory and
+# name of your board's USD + components sidecar (e.g. a board-wide v1/v1.1
+# export), and set `root` to the board's root prim. The component-family
+# names below are placeholders too; use your sidecar's family names.
+#
+# Run:
+#   ISAAC_SIM_PATH=<isaac> <isaac>/python.sh -m cdf.config.cli \
+#       pcb_aoi/config/examples/solder_defects_board.yaml --execute
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 7
+
+output_dir: ../../../sdg_test_output/examples/solder-defects/output_dir
+
+scene:
+  usd: __BOARD_DIR__/__BOARD__.usd
+  root: /__BOARD_ROOT__
+  components:
+    sidecar: __BOARD_DIR__/__BOARD__.components.json
+    # The pool the SMT solder defects below draw from (a defect can also
+    # name its own component_types, as `dry_contact` does).
+    types: [CAP_SMD_0603, CAP_SMD_3216]
+
+operations:
+  # Pose and solder defects coexist in one job: operations run in order
+  # (transform ops -> solder solve -> capture), so tombstoned parts get
+  # simulated solder on the MOVED geometry, and the selections stay
+  # non-overlapping -- a tombstoned part never also draws a solder defect.
+  tombstone:
+    ratio: 0.1
+    angle: [70, 90]
+
+  # The solve everything else rides on. surface_evolver is required: a
+  # solder defect + a solver that silently ignores defect intent
+  # (procedural) is a validation error by design.
+  solder_joints:
+    solver: surface_evolver
+    source: components
+    serialization: all
+    serialization_path: generated/board_with_solder_defects.usda
+    options: {workers: 0}
+
+  # Starved joints: 5% of the selected pool, severity sampled per part.
+  # The shape pair drives the joints it applies to (lead_climb THT-only,
+  # fullness both kinds, sampled per joint); volume_ratio drives whatever
+  # the shape pair does not. On THT this is the "less solder" valley:
+  # barely wets the lead, starved silhouette.
+  insufficient:
+    ratio: 0.05
+    volume_ratio: [0.3, 0.7]         # fraction of the paste-driven nominal
+    lead_climb: [0.25, 0.5]          # THT: wetted height / pin protrusion
+    fullness: [0.4, 0.7]             # volume / straight-cone fillet
+
+  # Bright joints (THT-only): a steep, starved meniscus -- real climb,
+  # necked-in fill, reads shiny under ring lighting.
+  bright:
+    ratio: 0.03
+    lead_climb: [0.6, 0.9]
+    fullness: [0.35, 0.6]
+
+  # Over-filled joints: same footprint, more volume (> 1). On THT this is
+  # hidden/excess: lead_climb > 1 buries the pin tip under the cap.
+  excess:
+    ratio: 0.02
+    volume_ratio: [1.8, 2.6]         # SMT: sampled per component
+    lead_climb: [1.05, 1.35]         # THT: > 1 = over the top
+    fullness: [1.0, 1.3]
+
+  # Interrupted (both kinds): the pad itself is partially exposed -- a
+  # noisy dewetting front from a random azimuth; the exposed-area fraction
+  # is exact by construction. On THT the ring stays closed (a broken ring
+  # is dry_contact and gets reported).
+  interrupted:
+    ratio: 0.03
+    pad_exposure: [0.2, 0.5]         # exposed pad area / total pad area
+
+  # Solder absent, component present (paste suppressed with it). No
+  # parameters: the volume ratio is definitionally 0.
+  missing_solder:
+    ratio: 0.02
+
+  # Through-hole only: the fillet must NOT ring the barrel (genus 1 -> 0).
+  # Severity = fraction of the circumference left unwetted, sampled per
+  # joint; where the gap faces is always randomized and deliberately not
+  # configurable.
+  dry_contact:
+    ratio: 1.0
+    component_types: [TO254, TO92]
+    gap_fraction: [0.25, 0.5]
+
+annotations:
+  components: true
+  # insufficient / bright / excess / interrupted / missing_solder /
+  # dry_contact become defect semantic classes, exactly like the pose
+  # operations. The class name is the
+  # ONLY defect information exported; observables are verified internally and
+  # discarded (no solder metrology in logs, coverage, or USD).
+  operation_labels: defect
+
+capture:
+  output_start: 0
+  renderer:
+    mode: pathtracing
+    resolution: [1280, 720]
+    spp: 1
+    total_spp: 64
+  camera:
+    side: top
+    rotation: {x: 0.0, y: 0.0, z: 0.0}
+  scan_grid: [1, 1]
+  limits: {triggers: 1, max_images: 1}
+  outputs:
+    annotators: [rgb, bounding_box_2d_tight, semantic_segmentation]
+    semantic_types: [defect]
+    colorize: [semantic_segmentation]

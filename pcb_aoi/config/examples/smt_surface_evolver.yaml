@@ -1,0 +1,109 @@
+# Tombstone the PCB SMT coupon, simulate its solder with Surface Evolver,
+# render defect semantics, and write a self-contained solder-augmented USD --
+# all inside one Isaac job. This is smt_shift.yaml with the pose swapped for
+# tombstone and the solder solver switched from `procedural` to
+# `surface_evolver` (+ USD serialization).
+#
+# The solver is a drop-in for `procedural`: operations run in order (transform
+# ops -> solder_joints -> capture), so the pose has already moved the component
+# when the solve runs and the simulated solder lands on the moved geometry.
+#
+# ONE-TIME RUNTIME SETUP -- `surface_evolver` is a `simulated` solver that only
+# registers where its deps import (a stock render runtime lacks them):
+#
+#   1. Build the Evolver binary (developer setup; see the repo root README):
+#        pcb_aoi/solder_evolver/third_party/evolver/build.sh
+#   2. Install the two missing geometry wheels into the runtime's Python:
+#        <isaac>/kit/python/bin/python3 -m pip install \
+#            manifold3d==3.5.2 warp-lang==1.15.0
+#      (trimesh/scipy/numpy are already in the runtime; versions from
+#      requirements.txt.)
+#   3. Run with ISAAC_SIM_PATH set; find_evolver() picks up the vendored binary,
+#      or point SOLDER_EVOLVER_BIN at one.
+#
+# Without that setup the config fails fast with an unknown-solver error rather
+# than silently falling back to procedural.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 7
+
+output_dir: ../../../sdg_test_output/examples/smt-surface-evolver/output_dir
+
+scene:
+  usd: /path/to/your_board.usdc  # EDIT ME -- this release ships no board; see README.md
+  root: /Board
+  camera: /World/camera_light/Camera
+  camera_xform: /World/camera_light
+  ring_light: /World/camera_light/aoi_ring_light
+  components:
+    types: [C_0805_2012Metric]
+
+appearance:
+  lighting:
+    mode: rgb_light
+    preserve_scene_light_color: false
+    exposure: 0.25
+    cone_angle: 120.0
+    cone_softness: 1.0
+    dome_fill:
+      intensity: 700.0
+    layers:
+      Inner_Red:
+        intensity: 6500.0
+        color: [1.0, 0.0, 0.0]
+      Middle_Green:
+        intensity: 3000.0
+        color: [0.0, 1.0, 0.0]
+      Outer_Blue:
+        intensity: 4500.0
+        color: [0.0, 0.0, 1.0]
+  vantablack_components: false
+
+operations:
+  # Pose first: operations run in order, so the solve below sees the tombstoned
+  # component and the simulated solder follows the moved geometry.
+  tombstone:
+    ratio: 1.0
+    angle: [70.0, 90.0]
+  solder_joints:
+    solver: surface_evolver          # the simulated solver (needs the runtime setup above)
+    component_types: [C_0805_2012Metric]
+    options:                         # -> surface_evolver solver_options
+      # Cores the solve may use. Leave at 0 to use the machine; set a number
+      # only to keep cores free for other work.
+      workers: 0
+      # An explicit fullness here would drive every SMT joint's target
+      # from its own straight-cone fillet (volume / straight cone; 1.0 is
+      # a flat silhouette). Left unset, SMT joints keep the paste-driven
+      # nominal -- the printed deposit is mass conservation.
+      # fullness: 0.85
+      # Per-component solder-quality defects are NOT options here -- each
+      # is its own operation under `operations:` (insufficient / bright /
+      # excess / interrupted / missing_solder / dry_contact); see
+      # examples/solder_defects_board.yaml.
+
+execution:
+  # Export the complete composed board after defects and solder generation.
+  serialization_path: generated/board_with_solder.usda
+
+annotations:
+  components: true
+  operation_labels: defect
+
+capture:
+  output_start: 0
+  renderer:
+    mode: pathtracing
+    resolution: [640, 360]
+    spp: 1
+    total_spp: 4
+    max_bounces: 4
+  camera:
+    side: top
+    rotation: {x: 0.0, y: 0.0, z: -90.0}
+  scan_grid: [1, 1]
+  limits: {triggers: 1, max_images: 1}
+  outputs:
+    annotators: [rgb, bounding_box_2d_tight, semantic_segmentation]
+    semantic_types: [defect]
+    colorize: [semantic_segmentation]

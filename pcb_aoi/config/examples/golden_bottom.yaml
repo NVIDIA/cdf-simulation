@@ -1,0 +1,37 @@
+# Render one illuminated bottom-side PCB golden RGB image without component
+# metadata, defects, annotations, or postprocessing.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 11
+
+output_dir: ../../../sdg_test_output/examples/golden-bottom/output_dir
+
+scene:
+  usd: /path/to/your_board.usdc  # EDIT ME -- this release ships no board; see README.md
+  root: /Board
+
+appearance:
+  lighting:
+    mode: white_light
+    exposure: 0.0
+    cone_angle: 120.0
+    cone_softness: 1.0
+    dome:
+      intensity: 1000.0
+      visible: true
+
+capture:
+  renderer:
+    mode: pathtracing
+    resolution: [640, 360]
+    spp: 1
+    total_spp: 4
+    max_bounces: 2
+  camera:
+    side: bottom
+    rotation: {x: 0.0, y: 0.0, z: -90.0}
+  scan_grid: [1, 1]
+  limits: {triggers: 1, max_images: 1}
+  outputs:
+    annotators: [rgb]
+    image_format: png

@@ -1,0 +1,67 @@
+# Generate procedural solder for one PCB through-hole component and capture an
+# illuminated bottom-side RGB, bounding-box, and semantic dataset.
+api_version: 1.0.0
+domain: pcb-aoi
+random_seed: 7
+
+output_dir: ../../../sdg_test_output/examples/tht/output_dir
+
+scene:
+  usd: /path/to/your_board.usdc  # EDIT ME -- this release ships no board; see README.md
+  root: /Board
+  camera: /World/camera_light/Camera
+  camera_xform: /World/camera_light
+  ring_light: /World/camera_light/aoi_ring_light
+  components:
+    types: [PinHeader_1x3_P2.54mm_Drill1.1mm]
+
+appearance:
+  lighting:
+    mode: rgb_light
+    preserve_scene_light_color: false
+    exposure: 0.25
+    cone_angle: 120.0
+    cone_softness: 1.0
+    dome_fill:
+      intensity: 700.0
+    layers:
+      Inner_Red:
+        intensity: 6500.0
+        color: [1.0, 0.0, 0.0]
+      Middle_Green:
+        intensity: 3000.0
+        color: [0.0, 1.0, 0.0]
+      Outer_Blue:
+        intensity: 4500.0
+        color: [0.0, 0.0, 1.0]
+  vantablack_components: false
+
+operations:
+  solder_joints:
+    solver: procedural
+    component_types: [PinHeader_1x3_P2.54mm_Drill1.1mm]
+    options:
+      height_ratio: 0.9
+      resolution: 20
+      solid: true
+
+annotations:
+  components: true
+
+capture:
+  output_start: 0
+  renderer:
+    mode: pathtracing
+    resolution: [640, 360]
+    spp: 1
+    total_spp: 4
+    max_bounces: 4
+  camera:
+    side: bottom
+    rotation: {x: 0.0, y: 0.0, z: -90.0}
+  scan_grid: [1, 1]
+  limits: {triggers: 1, max_images: 1}
+  outputs:
+    annotators: [rgb, bounding_box_2d_tight, semantic_segmentation]
+    semantic_types: [class]
+    colorize: [semantic_segmentation]

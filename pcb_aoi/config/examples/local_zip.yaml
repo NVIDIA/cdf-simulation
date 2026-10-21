@@ -1,0 +1,29 @@
+# Load a local ZIP containing one root-level PCB USD scene and render one
+# bottom-side golden RGB image. Replace the archive path and scene root.
+api_version: 1.0.0
+domain: pcb-aoi
+
+output_dir: ../../../sdg_test_output/examples/local-zip/output_dir
+
+scene:
+  usd: /data/boards/board.zip
+  root: /Board
+
+appearance:
+  lighting:
+    mode: white_light
+    dome:
+      intensity: 1000.0
+      visible: true
+
+capture:
+  renderer:
+    resolution: [640, 360]
+    total_spp: 4
+  camera:
+    side: bottom
+    rotation: {x: 0.0, y: 0.0, z: -90.0}
+  scan_grid: [1, 1]
+  limits: {triggers: 1, max_images: 1}
+  outputs:
+    annotators: [rgb]

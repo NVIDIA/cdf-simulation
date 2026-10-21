@@ -58,11 +58,19 @@ import json
 import os
 import re
 import shutil
+import sys
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 from PIL import Image
+
+_FILE_UTILS_DIR = Path(__file__).resolve().parents[1] / "file_utils"
+if str(_FILE_UTILS_DIR) not in sys.path:
+    sys.path.insert(0, str(_FILE_UTILS_DIR))
+
+from path_safety import confined_path, safe_path_segment  # noqa: E402
 
 
 def find_frames(trigger_dir: str, prefix: str, ext: str) -> dict[str, str]:
@@ -128,6 +136,7 @@ def build_pair_dataset(
     # Determine light mode suffix
     if light_mode is None:
         light_mode = detect_light_mode(defect_dir)
+    light_mode = safe_path_segment(light_mode, "UnknownLight")
     print(f"Light mode: {light_mode}")
 
     good_rgb = find_frames(good_dir, "rgb", "png")
@@ -197,15 +206,15 @@ def build_pair_dataset(
         suffix = f"{frame_id}_{light_mode}"
 
         # golden
-        shutil.copy2(good_rgb[idx], os.path.join(golden_dir, f"{suffix}.png"))
+        shutil.copy2(good_rgb[idx], confined_path(golden_dir, f"{suffix}.png"))
 
         # defect
-        shutil.copy2(defect_rgb[idx], os.path.join(defect_out, f"{suffix}.png"))
+        shutil.copy2(defect_rgb[idx], confined_path(defect_out, f"{suffix}.png"))
 
         # mask
-        shutil.copy2(defect_seg[idx], os.path.join(mask_dir, f"{suffix}.png"))
+        shutil.copy2(defect_seg[idx], confined_path(mask_dir, f"{suffix}.png"))
         if idx in defect_labels:
-            shutil.copy2(defect_labels[idx], os.path.join(mask_dir, f"{suffix}.json"))
+            shutil.copy2(defect_labels[idx], confined_path(mask_dir, f"{suffix}.json"))
 
         copied += 1
 
@@ -278,6 +287,7 @@ def build_pair_dataset_component(
     """
     if light_mode is None:
         light_mode = detect_light_mode(defect_dir)
+    light_mode = safe_path_segment(light_mode, "UnknownLight")
     print(f"Light mode: {light_mode}")
 
     golden_out = os.path.join(output_dir, "golden")
@@ -387,14 +397,16 @@ def build_pair_dataset_component(
                 skipped_coverage += 1
                 continue
 
-            comp_name = comp_key.split("/")[-1]
+            comp_name = safe_path_segment(
+                comp_key.replace("\\", "/").split("/")[-1], "component"
+            )
             suffix = f"{frame_idx}_{comp_name}_{light_mode}"
 
-            good_rgb_img.crop(crop_box).save(os.path.join(golden_out, f"{suffix}.png"))
-            defect_rgb_img.crop(crop_box).save(os.path.join(defect_out, f"{suffix}.png"))
-            sem_crop.save(os.path.join(mask_out, f"{suffix}.png"))
+            good_rgb_img.crop(crop_box).save(confined_path(golden_out, f"{suffix}.png"))
+            defect_rgb_img.crop(crop_box).save(confined_path(defect_out, f"{suffix}.png"))
+            sem_crop.save(confined_path(mask_out, f"{suffix}.png"))
             if sem_labels_blob is not None:
-                with open(os.path.join(mask_out, f"{suffix}.json"), "w") as f:
+                with open(confined_path(mask_out, f"{suffix}.json"), "w") as f:
                     f.write(sem_labels_blob)
 
             frame_crops += 1

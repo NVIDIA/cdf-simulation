@@ -99,11 +99,14 @@ class TinNoiseParams:
     # Material — silvery metal mirroring the original tin.
     mat_metallic = 1.0
     mat_roughness = 0.25
-    # Scene context — overridden by pipeline from CFG (camera_path,
-    # pcba_root, comp_types).
+    # Scene context — set by the pipeline from CFG (camera_path, pcba_root,
+    # comp_types) or by the editor UI. ``pcba_root`` and ``comp_types`` name
+    # geometry inside ONE board, so they carry no default: a baked-in default
+    # matches nothing on any other board and reports zero patches as if the
+    # scene had no tin.
     camera_path = "/World/camera_light/Camera"
-    pcba_root = "/World/pcba_main_s_detail/PCBA/tn__60014242BASEA04_fM9E"
-    comp_types = ["_0603_H100"]
+    pcba_root = ""
+    comp_types = []
 
 
 PARAMS = TinNoiseParams()
@@ -413,7 +416,14 @@ def generate_tin_patches():
         UsdGeom.Xform.Define(stage, TIN_ROOT)
 
     mat = _ensure_material(stage, PARAMS)
-    comp_types = list(getattr(PARAMS, "comp_types", ["_0603_H100"]))
+    comp_types = list(getattr(PARAMS, "comp_types", None) or [])
+    if not comp_types:
+        print(
+            "[TinNoise] No component types set. Fill the editor's "
+            "component-type field, or pass component_types in the pcba "
+            "target config."
+        )
+        return
     instances = _find_instances(stage, PARAMS.camera_path, PARAMS.pcba_root, comp_types=comp_types)
     print(
         f"[TinNoise] {len(instances)} components in view → generating {len(instances) * 2} patches…"
@@ -447,6 +457,38 @@ import tempfile  # noqa: E402
 
 _NORMALMAP_DIR = os.path.join(tempfile.gettempdir(), "pcb_aoi_tin_normals")
 os.makedirs(_NORMALMAP_DIR, exist_ok=True)
+
+# Bounded on-disk cache (mirrors the in-memory _GEOM_CACHE_MAX pattern
+# above): ``randomize_tin_noise`` draws a fresh 31-bit seed per sample and
+# the seed is part of the cache key, so every trigger writes a brand-new
+# ~360 KB PNG into the FIXED shared dir — without eviction repeated
+# campaigns fill the host tmpfs. After each new write the oldest files (by
+# mtime) are removed until at most this many remain. The fixed-seed(42)
+# setup path still hits its single cached file, and PNG bytes for a given
+# cache key never change — only which keys stay resident does.
+_NORMALMAP_CACHE_MAX = 256
+
+
+def _evict_normalmap_cache():
+    """Best-effort LRU-by-mtime eviction of ``_NORMALMAP_DIR``."""
+    import glob
+
+    files = glob.glob(os.path.join(_NORMALMAP_DIR, "tin_normal_*.png"))
+    if len(files) <= _NORMALMAP_CACHE_MAX:
+        return
+
+    def _mtime(path: str) -> float:
+        try:
+            return os.path.getmtime(path)
+        except OSError:
+            return 0.0
+
+    files.sort(key=_mtime)
+    for path in files[: len(files) - _NORMALMAP_CACHE_MAX]:
+        try:
+            os.remove(path)
+        except OSError:  # concurrent writer/reader — stay best-effort
+            pass
 
 
 def _normalmap_cache_key(
@@ -615,4 +657,5 @@ def make_tin_normalmap(
         Image.fromarray(rgb, mode="RGB").save(out_path)
     except Exception as exc:  # pragma: no cover — PIL absence is rare in Kit
         raise RuntimeError(f"tin_noise_patch: PIL unavailable: {exc!r}")
+    _evict_normalmap_cache()
     return out_path
