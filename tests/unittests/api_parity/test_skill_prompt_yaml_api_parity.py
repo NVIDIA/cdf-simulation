@@ -327,7 +327,7 @@ class SkillPromptYamlApiParityTest(unittest.TestCase):
     def _skip_without_solver(self, filename: str) -> None:
         if (
             filename in _NEEDS_SIMULATED_SOLVER
-            and "surface_evolver" not in registered_solver_ids()
+            and "surface_evolver" not in registered_solver_ids(available_only=True)
         ):
             self.skipTest("surface_evolver is not registered in this environment")
 
