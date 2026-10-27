@@ -1812,7 +1812,7 @@ class JobConfigParityTest(unittest.TestCase):
         "dry_contact",
     )
     @unittest.skipUnless(
-        "surface_evolver" in registered_solver_ids(),
+        "surface_evolver" in registered_solver_ids(available_only=True),
         "solder defects require the simulated solver, which registers only "
         "where its geometry deps import (not in the starved CI images); "
         "the @_covers_operations attribute still satisfies the coverage "

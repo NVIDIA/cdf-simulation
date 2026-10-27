@@ -57,11 +57,11 @@ from pcb_aoi.board_metadata import (
 from pcb_aoi.solder_generation import registered_solver_ids
 
 #: Declaring a solder defect requires a SIMULATED solver, and surface_evolver
-#: registers only where its geometry deps import -- deliberately absent in
-#: the deps-starved generic test job. Tests that declare it skip there; the
+#: is usable only where its geometry deps import and the Evolver binary is
+#: built -- deliberately absent in the deps-starved generic test job. Tests that declare it skip there; the
 #: handler tests below stay (they exercise the runtime with solver 'none').
 _requires_simulated = unittest.skipUnless(
-    "surface_evolver" in registered_solver_ids(),
+    "surface_evolver" in registered_solver_ids(available_only=True),
     "surface_evolver is not registered in this environment",
 )
 

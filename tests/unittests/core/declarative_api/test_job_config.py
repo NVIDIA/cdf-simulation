@@ -759,7 +759,7 @@ class JobConfigTest(unittest.TestCase):
         self.assertGreaterEqual(len(examples), 11)
         from pcb_aoi.solder_generation import registered_solver_ids
 
-        available_solvers = set(registered_solver_ids())
+        available_solvers = set(registered_solver_ids(available_only=True))
         for path in examples:
             with self.subTest(example=path.name):
                 # An example may select a solder solver that is environment-gated:
